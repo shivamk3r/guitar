@@ -26,7 +26,7 @@ The core of the app. Real guitar skill is built here, not in theory.
 
 ## Status
 
-Early design. See [software_requirements.md](software_requirements.md) for the full specification.
+Early design. See [docs/](docs/) for the full specification, stack decision, and architecture.
 
 ## Non-goals (for now)
 
