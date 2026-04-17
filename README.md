@@ -2,7 +2,7 @@
 
 A browser-based guitar learning app for beginners, built around two ideas every good guitar teacher relies on:
 
-1. **Immediate audio feedback** — the app listens to your guitar through the microphone and tells you *right now* whether you're in tune, whether a chord rang cleanly, and whether your change landed on the beat.
+1. **Immediate audio feedback** — the app listens to your guitar through the microphone and tells you *right now* whether you're in tune, whether a chord rang cleanly, and whether your change landed on the beat. Feedback is scored **1–10** so you can see small improvements, not just pass/fail.
 2. **Deliberate practice** — short, focused drills that target the exact skill a beginner is struggling with (clean chord shapes, fast transitions, steady rhythm), with difficulty that adapts as you improve.
 
 ## The three sections
