@@ -55,19 +55,17 @@ The scaffold itself hasn't been created yet. First code change will set it up.
 
 ## Commands
 
-Scaffolding is pending. Once it lands, these will be the commands:
-
 ```
 pnpm install          # install deps
-pnpm dev              # Vite dev server
-pnpm build            # production build
-pnpm test             # Vitest (unit)
-pnpm test:e2e         # Playwright
+pnpm dev              # Vite dev server (localhost:5173)
+pnpm build            # production build (dist/)
+pnpm preview          # serve the built output
+pnpm test             # Vitest (unit + pipeline)
+pnpm test:e2e         # Playwright (builds + serves + runs)
 pnpm lint             # Biome check
-pnpm format           # Biome write
+pnpm format           # Biome format --write
+pnpm typecheck        # tsc -b --noEmit
 ```
-
-Until then, commands aren't runnable — don't try.
 
 ## Web Audio gotchas agents regularly miss
 
