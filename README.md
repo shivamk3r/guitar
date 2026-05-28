@@ -1,9 +1,13 @@
 # Guitar Coach
 
+[![CI](https://github.com/shivamk3r/guitar/actions/workflows/ci.yml/badge.svg)](https://github.com/shivamk3r/guitar/actions/workflows/ci.yml)
+
 A browser-based guitar learning app for beginners, built around two ideas every good guitar teacher relies on:
 
-1. **Immediate audio feedback** — the app listens to your guitar through the microphone and tells you *right now* whether you're in tune, whether a chord rang cleanly, and whether your change landed on the beat. Feedback is scored **1–10** so you can see small improvements, not just pass/fail.
-2. **Deliberate practice** — short, focused drills that target the exact skill a beginner is struggling with (clean chord shapes, fast transitions, steady rhythm), with difficulty that adapts as you improve.
+1. **Immediate audio feedback** - the app listens to your guitar through the microphone and tells you *right now* whether you're in tune, whether a chord rang cleanly, and whether your change landed on the beat. Feedback is scored **1-10** so you can see small improvements, not just pass/fail.
+2. **Deliberate practice** - short, focused drills that target the exact skill a beginner is struggling with (clean chord shapes, fast transitions, steady rhythm), with difficulty that adapts as you improve.
+
+Audio processing is designed to happen in the browser. There is no backend in v1, and audio is not uploaded or stored server-side.
 
 ## The three sections
 
@@ -24,12 +28,37 @@ The core of the app. Real guitar skill is built here, not in theory.
 - **Strumming patterns**: Visual + audible pattern, app checks your timing.
 - **Progress tracking**: Which chords you've mastered, your current BPM ceiling for each transition, and a simple streak.
 
+## Running locally
+
+```sh
+pnpm install
+pnpm dev
+```
+
+The Vite dev server runs at `http://localhost:5173`, which browsers treat as a secure context for microphone access.
+
+## Verification
+
+```sh
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm test:e2e
+```
+
+The Playwright e2e suite uses fake browser media devices, so it does not need a live microphone.
+
 ## Status
 
-Early design. See [docs/](docs/) for the full specification, stack decision, and architecture.
+Work-in-progress frontend prototype. See [docs/](docs/) for the full specification, stack decision, and architecture.
 
 ## Non-goals (for now)
 
 - Not a tab/sheet music reader.
 - Not a full song library with licensed content.
-- Not a replacement for a teacher — it's a practice companion that gives feedback between lessons.
+- Not a replacement for a teacher - it's a practice companion that gives feedback between lessons.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

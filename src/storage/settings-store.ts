@@ -21,6 +21,15 @@ export const useSettings = create<SettingsState>()((set, get) => ({
   },
   async update(patch) {
     const current = get();
+    const previous: SettingsRow = {
+      id: "singleton",
+      tuningId: current.tuningId,
+      metronomeAudible: current.metronomeAudible,
+      metronomeVolume: current.metronomeVolume,
+      lastCalibrationQuality: current.lastCalibrationQuality,
+      sessionsThisWeek: current.sessionsThisWeek,
+      lastSessionIso: current.lastSessionIso,
+    };
     const next: SettingsRow = {
       id: "singleton",
       tuningId: current.tuningId,
@@ -31,8 +40,13 @@ export const useSettings = create<SettingsState>()((set, get) => ({
       lastSessionIso: current.lastSessionIso,
       ...patch,
     };
-    const db = await getDb();
-    await db.put("settings", next);
     set(next);
+    try {
+      const db = await getDb();
+      await db.put("settings", next);
+    } catch (err) {
+      set(previous);
+      throw err;
+    }
   },
 }));

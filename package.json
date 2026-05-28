@@ -2,7 +2,16 @@
   "name": "guitar-coach",
   "private": true,
   "version": "0.1.0",
+  "description": "A browser-based guitar learning app with real-time microphone feedback.",
+  "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shivamk3r/guitar.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shivamk3r/guitar/issues"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
