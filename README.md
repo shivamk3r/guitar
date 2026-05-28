@@ -9,6 +9,8 @@ The app has two feedback loops:
 1. **Immediate browser feedback** - Web Audio and AudioWorklet analyze pitch, chords, and timing in real time so tuner and practice feedback stays fast.
 2. **Long-term learning analysis** - with explicit consent, tuning, chord-check, and practice sessions are recorded, uploaded to the local backend, stored, queued for analysis, and used to build progress guidance over time.
 
+The frontend also includes a **Learn** tab with browser-only glossary lessons for beginner terms such as pitch, fret, cent, beat, chord, rhythm, tempo, tuning, and string.
+
 ## Architecture
 
 This is now a local-first monorepo:

@@ -27,7 +27,7 @@ guitar/
 ## 3. Service Boundaries
 
 - **Frontend (`apps/frontend`)**
-  - Owns React routes, UI, Web Audio/AudioWorklet DSP, immediate scoring, and browser recording orchestration.
+  - Owns React routes, UI, Web Audio/AudioWorklet DSP, immediate scoring, browser-only Learn lessons, and browser recording orchestration.
   - Stores local settings and anonymous learner identifiers in IndexedDB.
   - Uploads recordings to the API only after explicit consent.
 
@@ -52,6 +52,7 @@ The existing frontend feature isolation still applies inside `apps/frontend/src`
 
 - Features must not import from other features.
 - Shared code belongs in `audio/`, `storage/`, `data/`, `ui/`, `api/`, or `lib/`.
+- Static lesson/glossary content belongs in `data/`; feature screens can render it without backend calls.
 - AudioWorklet code stays plain TypeScript/JavaScript with no React or DOM dependencies.
 - High-frequency audio events must not be stored in React state.
 - Recording is an outer session concern; it must not slow or replace the real-time DSP path.
@@ -70,16 +71,17 @@ Initial v1 endpoints:
 
 The API uses anonymous learner profiles for now. Account auth is a later milestone.
 
-## 6. Recording and Analysis Flow
+## 6. Browser Learning, Recording, and Analysis Flow
 
 1. Learner enables recording consent in Settings.
 2. Frontend creates or reuses an anonymous learner profile.
 3. Tuner, chord-check, and practice sessions continue using Web Audio for immediate feedback.
-4. When a consented session starts, the frontend creates a backend session and starts `MediaRecorder` on the existing mic stream.
-5. When the session stops, the frontend uploads the recorded audio blob to the API.
-6. API stores metadata in Postgres, stores audio in MinIO, and enqueues an SQS analysis job.
-7. Worker consumes the job and writes `AnalysisResult` rows.
-8. Progress endpoints use session and analysis history to guide the learner.
+4. Learn glossary lessons use Web Audio synthesis and UI animation without microphone access or backend calls.
+5. When a consented session starts, the frontend creates a backend session and starts `MediaRecorder` on the existing mic stream.
+6. When the session stops, the frontend uploads the recorded audio blob to the API.
+7. API stores metadata in Postgres, stores audio in MinIO, and enqueues an SQS analysis job.
+8. Worker consumes the job and writes `AnalysisResult` rows.
+9. Progress endpoints use session and analysis history to guide the learner.
 
 ## 7. Local Runtime
 
@@ -96,7 +98,7 @@ Persistent Docker volumes keep Postgres, MinIO, and LocalStack state across rest
 
 ## 8. Testing Strategy
 
-- **Frontend unit tests:** Vitest for DSP, scoring, stores, and components.
+- **Frontend unit tests:** Vitest for DSP, scoring, stores, glossary data, and components.
 - **Frontend e2e:** Playwright with fake media devices.
 - **Backend unit/API tests:** Pytest with SQLite and fake storage/queue dependencies.
 - **Compose smoke:** `docker compose config`, `docker compose up --build`, `/health`, and a recording-upload path.

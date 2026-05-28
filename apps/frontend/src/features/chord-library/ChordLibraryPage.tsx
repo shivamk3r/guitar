@@ -1,6 +1,7 @@
 import { CHORDS, type ChordTier } from "@/data/chords";
 import { useProgress } from "@/storage/progress-store";
 import { Fretboard } from "@/ui/Fretboard";
+import { LearnTermLink } from "@/ui/LearnTermLink";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -32,7 +33,8 @@ export function ChordLibraryPage() {
         <div>
           <h1 className="text-2xl font-semibold">Chord Library</h1>
           <p className="text-muted text-sm mt-1">
-            Open chords and simple shapes. Pick one to see its diagram and check your own play.
+            Open <LearnTermLink termId="chord">chords</LearnTermLink> and simple shapes. Pick one to
+            see its diagram and check your own play.
           </p>
         </div>
         <label className="text-sm text-muted">

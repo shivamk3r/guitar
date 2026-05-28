@@ -1,6 +1,8 @@
 import type { ChordDef } from "@/data/chords";
 import { Button } from "@/ui/Button";
 import { Fretboard, type StringState } from "@/ui/Fretboard";
+import { LearnTermLink } from "@/ui/LearnTermLink";
+import { LinkedFeedbackCue } from "@/ui/LinkedFeedbackCue";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { usePractice } from "../practice-store";
@@ -45,10 +47,11 @@ export function DrillShell({
           {subtitle && <p className="text-muted text-sm mt-1">{subtitle}</p>}
         </div>
         <div className="flex items-center gap-3">
-          <label className="text-sm text-muted flex items-center gap-2">
-            BPM
+          <div className="text-sm text-muted flex items-center gap-2">
+            <LearnTermLink termId="tempo">BPM</LearnTermLink>
             <input
               type="number"
+              aria-label="BPM"
               min={minBpm}
               max={maxBpm}
               value={session.bpm}
@@ -58,7 +61,7 @@ export function DrillShell({
               className="bg-panel border border-white/10 rounded px-2 py-1 text-ink w-20 tabular-nums"
               disabled={session.running}
             />
-          </label>
+          </div>
           {session.running ? (
             <Button variant="danger" onClick={() => session.stop()}>
               Stop
@@ -99,7 +102,9 @@ export function DrillShell({
               <div>
                 <span className="text-muted">Last:</span>{" "}
                 <span className="font-medium tabular-nums">{session.lastEvent.scored.score}</span>{" "}
-                <span className="text-muted">· {session.lastEvent.scored.cue}</span>
+                <span className="text-muted">
+                  · <LinkedFeedbackCue cue={session.lastEvent.scored.cue} />
+                </span>
               </div>
             </div>
           )}

@@ -4,6 +4,7 @@ import { type StringTuning, TUNINGS, getTuning } from "@/data/tunings";
 import { NOTE_NAMES } from "@/lib/math";
 import { useSettings } from "@/storage/settings-store";
 import { Button } from "@/ui/Button";
+import { LearnTermLink } from "@/ui/LearnTermLink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PitchStabilityTrace, type PitchStabilityTraceHandle } from "./PitchStabilityTrace";
 import { TunerNeedle } from "./TunerNeedle";
@@ -117,7 +118,8 @@ export function TunerPage() {
         <div>
           <h1 className="text-2xl font-semibold">Tuner</h1>
           <p className="text-muted text-sm mt-1">
-            Pluck a single string and hold until the needle locks at centre.
+            Pluck a single <LearnTermLink termId="string">string</LearnTermLink> and hold until the{" "}
+            <LearnTermLink termId="pitch">pitch</LearnTermLink> locks near center.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -159,13 +161,24 @@ export function TunerPage() {
               targetLabel={target ? `${target.note}${target.octave}` : ""}
             />
             <PitchStabilityTrace ref={traceRef} target={target} />
+            <p className="mt-3 text-xs text-muted">
+              The needle and trace show <LearnTermLink termId="cent">cents</LearnTermLink> from the
+              target in your selected <LearnTermLink termId="tuning">tuning</LearnTermLink>.
+            </p>
             <div className="mt-6 flex items-center justify-between text-sm text-muted">
               <div>
-                {status === "signal-weak"
-                  ? "Signal weak — pluck a string closer to the mic."
-                  : note
-                    ? `${hz.toFixed(2)} Hz`
-                    : "Waiting for a note…"}
+                {status === "signal-weak" ? (
+                  <>
+                    Signal weak — pluck a <LearnTermLink termId="string">string</LearnTermLink>{" "}
+                    closer to the mic.
+                  </>
+                ) : note ? (
+                  `${hz.toFixed(2)} Hz`
+                ) : (
+                  <>
+                    Waiting for a <LearnTermLink termId="note">note</LearnTermLink>…
+                  </>
+                )}
               </div>
               <Button variant="secondary" size="sm" onClick={handleStop}>
                 Stop
