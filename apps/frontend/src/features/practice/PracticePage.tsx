@@ -34,6 +34,11 @@ export function PracticePage() {
 
       <div className="grid md:grid-cols-2 gap-4 mb-8">
         <DrillCard
+          title="Timed chord practice"
+          body="Choose chords, tempo, rotation, and length. Strum on the moving beat timeline."
+          to="/practice/timed-chords"
+        />
+        <DrillCard
           title="Chord change drill"
           body="Pick 2+ chords and a tempo. The metronome counts; the app listens and scores each change."
           to="/practice/chord-change"

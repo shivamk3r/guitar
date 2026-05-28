@@ -1,6 +1,7 @@
 import { type ActiveRecordedSession, startRecordedSession } from "@/audio/sessionRecording";
 import { ensureEngineStarted, getEngine, useEngineState } from "@/audio/useAudioEngine";
 import { useSettings } from "@/storage/settings-store";
+import { AudioInputSelect } from "@/ui/AudioInputSelect";
 import { Button } from "@/ui/Button";
 import { LearnTermLink } from "@/ui/LearnTermLink";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -154,7 +155,8 @@ export function StrummingDrillPage() {
             against the <LearnTermLink termId="beat">beat</LearnTermLink>.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-start gap-3 flex-wrap justify-end">
+          <AudioInputSelect disabled={running} />
           <div className="text-sm text-muted">
             <LearnTermLink termId="rhythm">Pattern</LearnTermLink>
             <select

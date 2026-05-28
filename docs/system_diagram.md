@@ -4,6 +4,7 @@
 flowchart LR
   subgraph Browser["Browser - React frontend"]
     UI["React app"]
+    MicSelect["Audio input selector"]
     Worklet["AudioWorklet realtime DSP"]
     Recorder["MediaRecorder session recorder"]
     IndexedDB["IndexedDB settings, anonymous learner id"]
@@ -21,7 +22,8 @@ flowchart LR
     Worker["Python analysis worker"]
   end
 
-  UI -->|"mic stream"| Worklet
+  UI --> MicSelect
+  MicSelect -->|"selected mic stream"| Worklet
   UI -->|"consent and session state"| IndexedDB
   UI -->|"record after explicit consent"| Recorder
   Recorder -->|"POST /v1/sessions/{id}/recordings"| API

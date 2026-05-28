@@ -1,9 +1,11 @@
+import { classifyStrings, expectedRingsMask, matchChord } from "@/audio/chord-detection";
 import { type ActiveRecordedSession, startRecordedSession } from "@/audio/sessionRecording";
 import { ensureEngineStarted, getEngine, useEngineState } from "@/audio/useAudioEngine";
 import { getChord, playedNotes } from "@/data/chords";
 import { scoreEvent } from "@/features/practice/scoring";
 import { useProgress } from "@/storage/progress-store";
 import { useSettings } from "@/storage/settings-store";
+import { AudioInputSelect } from "@/ui/AudioInputSelect";
 import { Button } from "@/ui/Button";
 import { Fretboard, type StringState } from "@/ui/Fretboard";
 import { LearnTermLink } from "@/ui/LearnTermLink";
@@ -11,7 +13,6 @@ import { LinkedFeedbackCue } from "@/ui/LinkedFeedbackCue";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useChordCheck } from "./chord-check-store";
-import { classifyStrings, expectedRingsMask, matchChord } from "./chord-detection";
 import { playChordReference } from "./reference-audio";
 
 const CAPTURE_MS = 400;
@@ -153,7 +154,7 @@ function ChordDetailInner({ chordId }: { chordId: string }) {
       <Link to="/chords" className="text-muted text-sm hover:text-ink">
         ← Back
       </Link>
-      <header className="mt-3 mb-6 flex items-baseline justify-between gap-4 flex-wrap">
+      <header className="mt-3 mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-3xl font-semibold">{chord.name}</h1>
           <div className="text-muted text-sm mt-1 flex flex-wrap gap-2">
@@ -164,6 +165,7 @@ function ChordDetailInner({ chordId }: { chordId: string }) {
             ))}
           </div>
         </div>
+        <AudioInputSelect disabled={engineState === "running"} />
       </header>
 
       <div className="grid md:grid-cols-2 gap-6">

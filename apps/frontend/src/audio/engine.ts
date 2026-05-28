@@ -11,10 +11,13 @@ export interface AudioEngineOptions {
 export interface AudioEngine {
   start(): Promise<void>;
   stop(): Promise<void>;
+  setInputDeviceId(deviceId: string | null): Promise<void>;
   on<T extends AudioEventType>(type: T, handler: (e: AudioEventMap[T]) => void): () => void;
   readonly state: EngineState;
   readonly ctx: AudioContext | null;
   readonly mediaStream: MediaStream | null;
+  readonly inputDeviceId: string | null;
+  readonly activeInput: { deviceId: string | null; label: string } | null;
   onStateChange(listener: (state: EngineState) => void): () => void;
 }
 
@@ -29,6 +32,7 @@ export function createAudioEngine(options: AudioEngineOptions = {}): AudioEngine
   let source: MediaStreamAudioSourceNode | null = null;
   let analyzer: AudioWorkletNode | null = null;
   let sinkGain: GainNode | null = null;
+  let inputDeviceId: string | null = options.deviceId ?? null;
 
   function setState(next: EngineState): void {
     state = next;
@@ -46,15 +50,14 @@ export function createAudioEngine(options: AudioEngineOptions = {}): AudioEngine
       // AudioContext may start suspended if called before user gesture — resume defensively.
       if (ctx.state === "suspended") await ctx.resume();
 
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          deviceId: options.deviceId,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: false,
-          channelCount: 1,
-        },
-      });
+      const audioConstraints: MediaTrackConstraints = {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: false,
+        channelCount: 1,
+      };
+      if (inputDeviceId) audioConstraints.deviceId = { exact: inputDeviceId };
+      stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
 
       await ctx.audioWorklet.addModule(WORKLET_URL);
       analyzer = new AudioWorkletNode(ctx, "guitar-analyzer", {
@@ -110,9 +113,22 @@ export function createAudioEngine(options: AudioEngineOptions = {}): AudioEngine
     setState("idle");
   }
 
+  async function setInputDeviceId(nextDeviceId: string | null): Promise<void> {
+    const next = nextDeviceId?.trim() || null;
+    if (inputDeviceId === next) return;
+    if (state === "starting" || state === "stopping") {
+      throw new Error("Cannot switch microphone while audio is starting or stopping.");
+    }
+    const wasRunning = state === "running";
+    if (wasRunning) await stop();
+    inputDeviceId = next;
+    if (wasRunning) await start();
+  }
+
   return {
     start,
     stop,
+    setInputDeviceId,
     on: <T extends AudioEventType>(type: T, handler: (e: AudioEventMap[T]) => void) =>
       emitter.on(type, handler),
     get state() {
@@ -123,6 +139,18 @@ export function createAudioEngine(options: AudioEngineOptions = {}): AudioEngine
     },
     get mediaStream() {
       return stream;
+    },
+    get inputDeviceId() {
+      return inputDeviceId;
+    },
+    get activeInput() {
+      const track = stream?.getAudioTracks()[0];
+      if (!track) return null;
+      const settings = track.getSettings();
+      return {
+        deviceId: settings.deviceId ?? inputDeviceId,
+        label: track.label,
+      };
     },
     onStateChange(listener) {
       stateListeners.add(listener);

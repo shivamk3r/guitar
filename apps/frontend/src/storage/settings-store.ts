@@ -24,6 +24,7 @@ export const useSettings = create<SettingsState>()((set, get) => ({
     const previous: SettingsRow = {
       id: "singleton",
       tuningId: current.tuningId,
+      audioInputDeviceId: current.audioInputDeviceId,
       metronomeAudible: current.metronomeAudible,
       metronomeVolume: current.metronomeVolume,
       lastCalibrationQuality: current.lastCalibrationQuality,
@@ -38,6 +39,7 @@ export const useSettings = create<SettingsState>()((set, get) => ({
     const next: SettingsRow = {
       id: "singleton",
       tuningId: current.tuningId,
+      audioInputDeviceId: current.audioInputDeviceId,
       metronomeAudible: current.metronomeAudible,
       metronomeVolume: current.metronomeVolume,
       lastCalibrationQuality: current.lastCalibrationQuality,

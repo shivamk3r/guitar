@@ -6,6 +6,7 @@ import { PracticePage } from "@/features/practice/PracticePage";
 import { ChordChangeDrillPage } from "@/features/practice/drills/ChordChangeDrillPage";
 import { ProgressionDrillPage } from "@/features/practice/drills/ProgressionDrillPage";
 import { StrummingDrillPage } from "@/features/practice/drills/StrummingDrillPage";
+import { TimedChordPracticePage } from "@/features/practice/timed/TimedChordPracticePage";
 import { SettingsPage } from "@/features/settings/SettingsPage";
 import { TunerPage } from "@/features/tuner/TunerPage";
 import { useProgress } from "@/storage/progress-store";
@@ -66,6 +67,7 @@ export function App() {
             <Route path="/chords" element={<ChordLibraryPage />} />
             <Route path="/chords/:id" element={<ChordDetailPage />} />
             <Route path="/practice" element={<PracticePage />} />
+            <Route path="/practice/timed-chords" element={<TimedChordPracticePage />} />
             <Route path="/practice/chord-change" element={<ChordChangeDrillPage />} />
             <Route path="/practice/progression/:id" element={<ProgressionDrillPage />} />
             <Route path="/practice/strumming" element={<StrummingDrillPage />} />

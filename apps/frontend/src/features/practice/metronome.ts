@@ -77,6 +77,10 @@ export class Metronome {
     return this.running;
   }
 
+  get startedAtAudioTime(): number | null {
+    return this.running ? this.startTime : null;
+  }
+
   private scheduleLoop = () => {
     if (!this.running || !this.ctx) return;
     const lookAhead = 0.2; // schedule 200ms ahead

@@ -3,6 +3,7 @@ import { type DBSchema, type IDBPDatabase, openDB } from "idb";
 export interface SettingsRow {
   id: "singleton";
   tuningId: string;
+  audioInputDeviceId: string | null;
   metronomeAudible: boolean;
   metronomeVolume: number;
   lastCalibrationQuality: "silent" | "quiet" | "good" | "clipping" | null;
@@ -39,7 +40,7 @@ export interface SessionSummary {
   id: string;
   startedAtIso: string;
   endedAtIso: string;
-  drillType: "chord-change" | "progression" | "strumming" | "chord-check";
+  drillType: "chord-change" | "progression" | "strumming" | "chord-check" | "timed-chord";
   chords: string[];
   targetBpm: number | null;
   averageScore: number;
@@ -88,6 +89,7 @@ export function getDb(): Promise<IDBPDatabase<GuitarDB>> {
 export const DEFAULT_SETTINGS: SettingsRow = {
   id: "singleton",
   tuningId: "standard",
+  audioInputDeviceId: null,
   metronomeAudible: false,
   metronomeVolume: 0.3,
   lastCalibrationQuality: null,
