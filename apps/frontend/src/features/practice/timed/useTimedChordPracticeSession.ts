@@ -37,6 +37,7 @@ export interface TimedChordPracticeSession {
   strumMarkers: TimedPracticeStrumMarker[];
   summary: TimedPracticeSummary | null;
   playheadBeat: number;
+  timelineBeat: number;
   countInRemainingBeats: number;
   currentIndex: number;
   error: string | null;
@@ -69,6 +70,7 @@ export function useTimedChordPracticeSession(
   const [strumMarkers, setStrumMarkers] = useState<TimedPracticeStrumMarker[]>([]);
   const [summary, setSummary] = useState<TimedPracticeSummary | null>(null);
   const [playheadBeat, setPlayheadBeat] = useState(0);
+  const [timelineBeat, setTimelineBeat] = useState(0);
   const [countInRemainingBeats, setCountInRemainingBeats] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -143,8 +145,16 @@ export function useTimedChordPracticeSession(
     pendingCapturesRef.current.clear();
     metronomeRef.current?.stop();
     metronomeRef.current = null;
+    const finalAttempts = attemptsRef.current;
+    const finalSummary = summarizeTimedPractice(finalAttempts);
     try {
-      await recordingRef.current?.stop();
+      await recordingRef.current?.stop(
+        buildTimedPracticeSessionMetadata({
+          attempts: finalAttempts,
+          config,
+          summary: finalSummary,
+        }),
+      );
     } catch (err) {
       console.error("session recording upload failed", err);
     } finally {
@@ -152,12 +162,11 @@ export function useTimedChordPracticeSession(
     }
     await getEngine().stop();
 
-    const finalAttempts = attemptsRef.current;
-    const finalSummary = summarizeTimedPractice(finalAttempts);
     setSummary(finalSummary);
     setStatus("ended");
     setPhase("ended");
     setCountInRemainingBeats(0);
+    setTimelineBeat((beat) => Math.max(0, beat));
     startAudioTimeRef.current = null;
     activePlanRef.current = [];
     pendingCapturesRef.current.clear();
@@ -175,7 +184,7 @@ export function useTimedChordPracticeSession(
         events: finalAttempts.length,
       }).catch((err) => console.error("save timed practice session failed", err));
     }
-  }, [clearTimers, config.bpm, config.chords, saveSession]);
+  }, [clearTimers, config, saveSession]);
 
   const createMiss = useCallback(
     (expected: ActiveExpected) => {
@@ -252,16 +261,21 @@ export function useTimedChordPracticeSession(
     [appendMarker, commitAttempt],
   );
 
-  const startPlayhead = useCallback((ctx: AudioContext, totalBeats: number) => {
-    const tick = () => {
-      const startAudioTime = startAudioTimeRef.current;
-      if (startAudioTime == null) return;
-      const beat = Math.max(0, (ctx.currentTime - startAudioTime) / secondsPerBeatRef.current);
-      setPlayheadBeat(Math.min(totalBeats, beat));
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    tick();
-  }, []);
+  const startPlayhead = useCallback(
+    (ctx: AudioContext, totalBeats: number, countInBeats: number) => {
+      const tick = () => {
+        const startAudioTime = startAudioTimeRef.current;
+        if (startAudioTime == null) return;
+        const beat = (ctx.currentTime - startAudioTime) / secondsPerBeatRef.current;
+        const minTimelineBeat = countInBeats > 0 ? -countInBeats : 0;
+        setTimelineBeat(Math.max(minTimelineBeat, Math.min(totalBeats, beat)));
+        setPlayheadBeat(Math.min(totalBeats, Math.max(0, beat)));
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      tick();
+    },
+    [],
+  );
 
   const start = useCallback(async () => {
     if (config.chords.length === 0) {
@@ -284,6 +298,7 @@ export function useTimedChordPracticeSession(
       setStrumMarkers([]);
       setSummary(null);
       setPlayheadBeat(0);
+      setTimelineBeat(config.countInBeats > 0 ? -config.countInBeats : 0);
       setCountInRemainingBeats(config.countInBeats);
       setPhase(config.countInBeats > 0 ? "count-in" : "scoring");
 
@@ -308,7 +323,6 @@ export function useTimedChordPracticeSession(
           order: config.order,
           sessionLength: config.sessionLength,
           chords: config.chords.map((chord) => chord.id),
-          audioInputDeviceId: settings.audioInputDeviceId,
         },
       }).catch((err) => {
         console.error("session recording failed", err);
@@ -372,13 +386,14 @@ export function useTimedChordPracticeSession(
       endTimeoutRef.current = window.setTimeout(() => {
         finishSession().catch((err) => console.error("timed practice finish failed", err));
       }, endDelayMs);
-      startPlayhead(ctx, totalBeats);
+      startPlayhead(ctx, totalBeats, config.countInBeats);
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : "Could not start timed practice.");
       setStatus("idle");
       setPhase("idle");
       setCountInRemainingBeats(0);
+      setTimelineBeat(0);
     }
   }, [clearTimers, config, createMiss, finishSession, settings, startPlayhead]);
 
@@ -474,11 +489,37 @@ export function useTimedChordPracticeSession(
     strumMarkers,
     summary,
     playheadBeat,
+    timelineBeat,
     countInRemainingBeats,
     currentIndex,
     error,
     start,
     stop,
+  };
+}
+
+function buildTimedPracticeSessionMetadata(input: {
+  attempts: readonly TimedPracticeAttempt[];
+  config: TimedChordPracticeConfig;
+  summary: TimedPracticeSummary;
+}): Record<string, unknown> {
+  return {
+    completionStatus: input.attempts.length > 0 ? "completed" : "stopped",
+    resultSummary:
+      input.attempts.length === 0
+        ? "No attempts scored"
+        : `${input.summary.averageScore.toFixed(1)}/10 average across ${input.attempts.length} attempts`,
+    score: input.summary.averageScore,
+    scoreSummary: input.summary,
+    practiceMode: "timed_chord_practice",
+    bpm: input.config.bpm,
+    beatsPerChord: input.config.beatsPerChord,
+    countInBeats: input.config.countInBeats,
+    order: input.config.order,
+    sessionLength: input.config.sessionLength,
+    chords: input.config.chords.map((chord) => chord.id),
+    chordNames: input.config.chords.map((chord) => chord.name),
+    attempts: input.attempts,
   };
 }
 

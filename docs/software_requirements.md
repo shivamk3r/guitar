@@ -32,7 +32,7 @@ The product closes the loop between "I played something" and "what should I do n
 - **FR-T5** Support standard tuning by default and alternate tunings including Drop D, Half-step down, DADGAD, and Open G.
 - **FR-T6** Work with acoustic guitar via built-in mic and electric guitar via audio interface input.
 - **FR-T7** If recording consent is enabled, record tuning sessions and upload them after capture for progress analysis.
-- **FR-T8** Show the current browser microphone input when available and let learners choose a preferred mic before starting audio feedback.
+- **FR-T8** Show the current browser microphone input when available, let learners choose a preferred mic before starting audio feedback, and show an input level meter while listening.
 
 ### 4.2 Chord Library
 
@@ -51,7 +51,7 @@ The product closes the loop between "I played something" and "what should I do n
 - **FR-P4** Adaptive tempo recommends slowing down or speeding up based on rolling scores.
 - **FR-P5** Session summaries show practiced material, score trends, BPM ceilings, and next-step guidance.
 - **FR-P6** If recording consent is enabled, practice sessions are recorded and uploaded for deeper progress analysis.
-- **FR-P7** Timed chord practice lets learners choose one or more chords, tempo, beats per chord, rotation order, session length, and a local count-in preference of off, 2 beats, 4 beats, or 8 beats. The default count-in is 4 beats. Count-in time starts the audio engine and optional metronome clicks but is excluded from scoring, timeline progress, summaries, and recommendations.
+- **FR-P7** Timed chord practice lets learners choose one or more chords, tempo, beats per chord, rotation order, session length, and a local count-in preference of off, 2 beats, 4 beats, or 8 beats. The default count-in is 4 beats. Count-in time starts the audio engine, optional metronome clicks, and visual timeline pre-roll, but is excluded from scoring, scored progress, summaries, and recommendations.
 
 ### 4.4 Learn Glossary
 
@@ -62,11 +62,20 @@ The product closes the loop between "I played something" and "what should I do n
 - **FR-L5** Initial Learn lessons run entirely in the browser with Web Audio and UI animation; they do not require microphone input, recording upload, backend services, or learner consent.
 - **FR-L6** Later Learn milestones may add optional microphone exercises and progress-aware recommendations after consent and progress controls are available.
 
-### 4.5 Learning Intelligence and Data
+### 4.5 Activity History
+
+- **FR-H1** Provide a History page that lists tuning, chord-check, and practice sessions in chronological order.
+- **FR-H2** Show each activity's type, start time, duration, completion status, score or tuning result, and whether a recording is available.
+- **FR-H3** Let learners open activity details with saved configuration including tuning preset, chord targets, BPM, beats per chord, practice length, score breakdown, and attempts when available.
+- **FR-H4** Save meaningful session metadata even when recording consent is disabled.
+- **FR-H5** Only save and replay raw audio when explicit recording consent is enabled.
+- **FR-H6** Use history as the durable foundation for later streaks, weak chord-transition detection, tuning consistency, practice frequency, and recommended drills.
+
+### 4.6 Learning Intelligence and Data
 
 - **FR-D1** Create an anonymous learner profile before storing backend sessions; account auth is deferred.
 - **FR-D2** Store recording consent history before uploading tuning, chord-check, or practice audio.
-- **FR-D3** Persist session metadata, audio object references, analysis jobs, and analysis results in backend storage.
+- **FR-D3** Persist session metadata for meaningful tuning, chord-check, and practice activity, audio object references when consented recordings exist, analysis jobs, and analysis results in backend storage.
 - **FR-D4** Store raw audio in S3-compatible object storage locally through MinIO.
 - **FR-D5** Enqueue recording analysis through an SQS-compatible queue locally through LocalStack.
 - **FR-D6** A worker consumes analysis jobs and writes extracted metrics/results. The first implementation may write placeholder metrics.
@@ -89,7 +98,9 @@ The product closes the loop between "I played something" and "what should I do n
 - **AR-4** Rhythm drills use onset detection with timestamps aligned to the audio clock.
 - **AR-5** Recording uses the already-granted microphone stream and does not replace the real-time feedback path.
 - **AR-6** Backend analysis is asynchronous and may use classical DSP, ML, or hybrid models in later milestones.
-- **AR-7** Browser audio input selection uses the selected `audioinput` device for realtime DSP and consented recording without uploading anything unless recording consent is enabled.
+- **AR-7** Browser audio input selection uses the selected `audioinput` device for realtime DSP and consented recording, falls back to browser default if the preferred device is unavailable, and disables switching during active scored or recorded sessions.
+- **AR-8** Microphone labels and device identifiers remain local browser UI/preference state and are not included in recording session metadata by default.
+- **AR-9** Browser microphone capture requests speech processing disabled (`echoCancellation`, `noiseSuppression`, and `autoGainControl`) so guitar recordings keep harmonics, sustain, and room detail. Consented recordings are saved as raw PCM WAV before app analysis filters; compressed browser recording is only a fallback when raw capture is unavailable.
 
 ## 7. Data Model
 

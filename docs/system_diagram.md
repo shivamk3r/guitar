@@ -6,7 +6,7 @@ flowchart LR
     UI["React app"]
     MicSelect["Audio input selector"]
     Worklet["AudioWorklet realtime DSP"]
-    Recorder["MediaRecorder session recorder"]
+    Recorder["Raw PCM session recorder"]
     IndexedDB["IndexedDB settings, anonymous learner id"]
   end
 
@@ -25,9 +25,10 @@ flowchart LR
   UI --> MicSelect
   MicSelect -->|"selected mic stream"| Worklet
   UI -->|"consent and session state"| IndexedDB
-  UI -->|"record after explicit consent"| Recorder
+  UI -->|"raw WAV after explicit consent"| Recorder
   Recorder -->|"POST /v1/sessions/{id}/recordings"| API
-  UI -->|"learners, consent, sessions, progress"| API
+  UI -->|"learners, consent, sessions, history, progress"| API
+  API -->|"recording playback for consented audio"| UI
 
   API --> Models
   Models --> Postgres

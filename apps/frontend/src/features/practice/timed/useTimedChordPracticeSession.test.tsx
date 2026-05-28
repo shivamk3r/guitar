@@ -1,3 +1,4 @@
+import { startRecordedSession } from "@/audio/sessionRecording";
 import { getChord } from "@/data/chords";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -36,6 +37,8 @@ const engineMock = vi.hoisted(() => {
 const metronomeMock = vi.hoisted(() => ({
   instances: [] as Array<{ emitBeat: (beat: number) => void }>,
 }));
+
+let rafCallback: FrameRequestCallback | null = null;
 
 vi.mock("@/audio/useAudioEngine", () => {
   const engine = {
@@ -100,10 +103,15 @@ vi.mock("../metronome", () => {
 describe("useTimedChordPracticeSession count-in", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation(() => 1);
+    rafCallback = null;
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      rafCallback = callback;
+      return 1;
+    });
     vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
     engineMock.reset();
     metronomeMock.instances.length = 0;
+    vi.mocked(startRecordedSession).mockClear();
   });
 
   afterEach(() => {
@@ -123,6 +131,15 @@ describe("useTimedChordPracticeSession count-in", () => {
     expect(result.current.phase).toBe("count-in");
     expect(result.current.countInRemainingBeats).toBe(4);
     expect(result.current.playheadBeat).toBe(0);
+    expect(result.current.timelineBeat).toBe(-4);
+
+    act(() => {
+      engineMock.ctx.currentTime = 1.1;
+      runAnimationFrame();
+    });
+
+    expect(result.current.timelineBeat).toBeCloseTo(-2);
+    expect(result.current.playheadBeat).toBe(0);
 
     act(() => {
       engineMock.emit("onset", { type: "onset", strength: 1, t: 1 });
@@ -138,6 +155,7 @@ describe("useTimedChordPracticeSession count-in", () => {
 
     expect(result.current.phase).toBe("scoring");
     expect(result.current.countInRemainingBeats).toBe(0);
+    expect(result.current.playheadBeat).toBe(0);
   });
 
   it("starts in the scoring phase when count-in is off", async () => {
@@ -149,8 +167,27 @@ describe("useTimedChordPracticeSession count-in", () => {
 
     expect(result.current.phase).toBe("scoring");
     expect(result.current.countInRemainingBeats).toBe(0);
+    expect(result.current.timelineBeat).toBe(0);
+  });
+
+  it("keeps microphone identifiers out of recording metadata", async () => {
+    const { result } = renderHook(() => useTimedChordPracticeSession(configWithCountIn(0)));
+
+    await act(async () => {
+      await result.current.start();
+    });
+
+    expect(vi.mocked(startRecordedSession)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(startRecordedSession).mock.calls[0]?.[0].metadata).not.toHaveProperty(
+      "audioInputDeviceId",
+    );
   });
 });
+
+function runAnimationFrame() {
+  if (!rafCallback) throw new Error("requestAnimationFrame was not scheduled");
+  rafCallback(0);
+}
 
 function configWithCountIn(countInBeats: TimedChordPracticeConfig["countInBeats"]) {
   const a = getChord("A");

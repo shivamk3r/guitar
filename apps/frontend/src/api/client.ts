@@ -9,6 +9,27 @@ export interface LearningSession {
   id: string;
   learner_id: string;
   activity_type: ActivityType;
+  started_at: string;
+  ended_at: string | null;
+  client_metadata: Record<string, unknown>;
+}
+
+export interface RecordingSummary {
+  id: string;
+  session_id: string;
+  content_type: string;
+  size_bytes: number;
+  captured_at: string;
+  created_at: string;
+}
+
+export interface SessionHistoryItem extends LearningSession {
+  duration_seconds: number | null;
+  completion_status: string;
+  score: number | null;
+  result_summary: string | null;
+  recording_available: boolean;
+  recordings: RecordingSummary[];
 }
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7654").replace(
@@ -61,8 +82,13 @@ export async function startLearningSession(input: {
   });
 }
 
-export async function closeLearningSession(sessionId: string): Promise<void> {
-  await patchJson(`/v1/sessions/${sessionId}`, {});
+export async function closeLearningSession(
+  sessionId: string,
+  metadata?: Record<string, unknown>,
+): Promise<void> {
+  await patchJson(`/v1/sessions/${sessionId}`, {
+    client_metadata: metadata ?? {},
+  });
 }
 
 export async function uploadRecording(input: {
@@ -71,13 +97,44 @@ export async function uploadRecording(input: {
   capturedAtIso: string;
 }): Promise<void> {
   const body = new FormData();
-  body.append("file", input.blob, `session-${input.sessionId}.webm`);
+  body.append(
+    "file",
+    input.blob,
+    `session-${input.sessionId}.${recordingExtension(input.blob.type)}`,
+  );
   body.append("captured_at", input.capturedAtIso);
   const response = await fetch(`${API_BASE_URL}/v1/sessions/${input.sessionId}/recordings`, {
     method: "POST",
     body,
   });
   if (!response.ok) throw new Error(await responseError(response));
+}
+
+export async function fetchLearnerHistory(learnerId: string): Promise<SessionHistoryItem[]> {
+  return getJson<SessionHistoryItem[]>(`/v1/learners/${learnerId}/history`);
+}
+
+export async function fetchSessionDetail(sessionId: string): Promise<SessionHistoryItem> {
+  return getJson<SessionHistoryItem>(`/v1/sessions/${sessionId}`);
+}
+
+export function recordingMediaUrl(recordingId: string): string {
+  return `${API_BASE_URL}/v1/recordings/${recordingId}/media`;
+}
+
+function recordingExtension(contentType: string): string {
+  const normalized = contentType.split(";")[0]?.trim().toLowerCase();
+  if (normalized === "audio/wav" || normalized === "audio/wave" || normalized === "audio/x-wav") {
+    return "wav";
+  }
+  if (normalized === "audio/mp4") return "mp4";
+  return "webm";
+}
+
+async function getJson<T>(path: string): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`);
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<T>;
 }
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {

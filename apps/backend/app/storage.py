@@ -34,7 +34,8 @@ class ObjectStorage:
         file_obj: BinaryIO,
         content_type: str,
     ) -> tuple[str, int]:
-        object_key = f"learners/{learner_id}/sessions/{session_id}/recordings/{recording_id}.webm"
+        extension = recording_file_extension(content_type)
+        object_key = f"learners/{learner_id}/sessions/{session_id}/recordings/{recording_id}.{extension}"
         current = file_obj.tell()
         file_obj.seek(0, 2)
         size_bytes = file_obj.tell()
@@ -47,6 +48,21 @@ class ObjectStorage:
         )
         return object_key, size_bytes
 
+    def get_recording(self, object_key: str) -> bytes:
+        response = self.client.get_object(Bucket=self.bucket, Key=object_key)
+        return response["Body"].read()
+
 
 def get_object_storage() -> ObjectStorage:
     return ObjectStorage()
+
+
+def recording_file_extension(content_type: str) -> str:
+    normalized = content_type.split(";")[0].strip().lower()
+    if normalized in {"audio/wav", "audio/wave", "audio/x-wav"}:
+        return "wav"
+    if normalized == "audio/mp4":
+        return "mp4"
+    if normalized == "audio/webm":
+        return "webm"
+    return "bin"

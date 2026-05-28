@@ -1,5 +1,4 @@
 import type { ChordDef } from "@/data/chords";
-import { AudioInputSelect } from "@/ui/AudioInputSelect";
 import { Button } from "@/ui/Button";
 import { Fretboard, type StringState } from "@/ui/Fretboard";
 import { LearnTermLink } from "@/ui/LearnTermLink";
@@ -48,7 +47,6 @@ export function DrillShell({
           {subtitle && <p className="text-muted text-sm mt-1">{subtitle}</p>}
         </div>
         <div className="flex items-start gap-3 flex-wrap justify-end">
-          <AudioInputSelect disabled={session.running} />
           <div className="text-sm text-muted flex items-center gap-2">
             <LearnTermLink termId="tempo">BPM</LearnTermLink>
             <input

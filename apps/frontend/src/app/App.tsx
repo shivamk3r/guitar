@@ -1,5 +1,6 @@
 import { ChordDetailPage } from "@/features/chord-library/ChordDetailPage";
 import { ChordLibraryPage } from "@/features/chord-library/ChordLibraryPage";
+import { HistoryPage } from "@/features/history/HistoryPage";
 import { ConceptPage } from "@/features/learn/ConceptPage";
 import { LearnPage } from "@/features/learn/LearnPage";
 import { PracticePage } from "@/features/practice/PracticePage";
@@ -11,6 +12,7 @@ import { SettingsPage } from "@/features/settings/SettingsPage";
 import { TunerPage } from "@/features/tuner/TunerPage";
 import { useProgress } from "@/storage/progress-store";
 import { useSettings } from "@/storage/settings-store";
+import { FloatingAudioInputControl } from "@/ui/FloatingAudioInputControl";
 import { clsx } from "@/ui/clsx";
 import { Suspense, useEffect } from "react";
 import { Link, NavLink, Route, Routes } from "react-router-dom";
@@ -53,6 +55,7 @@ export function App() {
             <NavItem to="/chords" label="Chord Library" />
             <NavItem to="/practice" label="Practice" />
             <NavItem to="/learn" label="Learn" />
+            <NavItem to="/history" label="History" />
           </nav>
           <div className="ml-auto shrink-0">
             <NavItem to="/settings" label="Settings" />
@@ -73,6 +76,8 @@ export function App() {
             <Route path="/practice/strumming" element={<StrummingDrillPage />} />
             <Route path="/learn" element={<LearnPage />} />
             <Route path="/learn/:id" element={<ConceptPage />} />
+            <Route path="/history" element={<HistoryPage />} />
+            <Route path="/history/:sessionId" element={<HistoryPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
@@ -84,6 +89,8 @@ export function App() {
           Real-time feedback stays in the browser. Consented recordings sync to your local backend.
         </div>
       </footer>
+
+      <FloatingAudioInputControl />
     </div>
   );
 }

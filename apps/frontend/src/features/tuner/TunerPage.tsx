@@ -3,7 +3,6 @@ import { ensureEngineStarted, getEngine, useEngineState } from "@/audio/useAudio
 import { type StringTuning, TUNINGS, getTuning } from "@/data/tunings";
 import { NOTE_NAMES } from "@/lib/math";
 import { useSettings } from "@/storage/settings-store";
-import { AudioInputSelect } from "@/ui/AudioInputSelect";
 import { Button } from "@/ui/Button";
 import { LearnTermLink } from "@/ui/LearnTermLink";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -29,6 +28,7 @@ export function TunerPage() {
   const traceRef = useRef<PitchStabilityTraceHandle | null>(null);
   const activeTargetRef = useRef<StringTuning | null>(null);
   const [activeTarget, setActiveTarget] = useState<StringTuning | null>(null);
+  const [lockedStringMidis, setLockedStringMidis] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     activeTargetRef.current = null;
@@ -65,8 +65,16 @@ export function TunerPage() {
     };
   }, [ingestPitch, ingestSilence, tuning]);
 
+  useEffect(() => {
+    if (!inTune || activeTarget == null) return;
+    setLockedStringMidis((current) =>
+      current[activeTarget.midi] ? current : { ...current, [activeTarget.midi]: true },
+    );
+  }, [activeTarget, inTune]);
+
   async function handleStart() {
     setError(null);
+    setLockedStringMidis({});
     try {
       const engine = await ensureEngineStarted();
       setStatus("listening");
@@ -92,7 +100,15 @@ export function TunerPage() {
 
   async function handleStop() {
     try {
-      await recordingRef.current?.stop();
+      await recordingRef.current?.stop(
+        buildTunerSessionMetadata({
+          hz,
+          lockedStringMidis,
+          noteLabel: note ? `${note.name}${note.octave}` : null,
+          tuning,
+          tuningId,
+        }),
+      );
     } catch (err) {
       console.error("session recording upload failed", err);
     } finally {
@@ -103,6 +119,7 @@ export function TunerPage() {
     setActiveTarget(null);
     traceRef.current?.reset();
     reset();
+    setLockedStringMidis({});
   }
 
   const isRunning = engineState === "running";
@@ -124,7 +141,6 @@ export function TunerPage() {
           </p>
         </div>
         <div className="flex items-start gap-3 flex-wrap justify-end">
-          <AudioInputSelect />
           <label className="text-sm text-muted">
             Tuning
             <select
@@ -186,7 +202,10 @@ export function TunerPage() {
                 Stop
               </Button>
             </div>
-            <StringChecklist activeTargetMidi={target?.midi ?? null} />
+            <StringChecklist
+              activeTargetMidi={target?.midi ?? null}
+              lockedStringMidis={lockedStringMidis}
+            />
           </>
         )}
       </div>
@@ -194,26 +213,22 @@ export function TunerPage() {
   );
 }
 
-function StringChecklist({ activeTargetMidi }: { activeTargetMidi: number | null }) {
+function StringChecklist({
+  activeTargetMidi,
+  lockedStringMidis,
+}: {
+  activeTargetMidi: number | null;
+  lockedStringMidis: Record<number, boolean>;
+}) {
   const tuningId = useSettings((s) => s.tuningId);
   const tuning = getTuning(tuningId);
-  const inTune = useTuner((s) => s.inTune);
-
-  // Track which strings the user has successfully locked this session
-  const [locked, setLocked] = useState<Record<number, boolean>>({});
-
-  useEffect(() => {
-    if (inTune && activeTargetMidi != null) {
-      setLocked((prev) => ({ ...prev, [activeTargetMidi]: true }));
-    }
-  }, [activeTargetMidi, inTune]);
 
   return (
     <div className="mt-6 grid grid-cols-6 gap-2">
       {tuning.strings.map((s, idx) => {
         const pc = ((s.midi % 12) + 12) % 12;
         const name = `${NOTE_NAMES[pc]}${s.octave}`;
-        const done = locked[s.midi];
+        const done = lockedStringMidis[s.midi];
         const current = activeTargetMidi === s.midi;
         return (
           <div
@@ -235,4 +250,37 @@ function StringChecklist({ activeTargetMidi }: { activeTargetMidi: number | null
       })}
     </div>
   );
+}
+
+function buildTunerSessionMetadata(input: {
+  hz: number;
+  lockedStringMidis: Record<number, boolean>;
+  noteLabel: string | null;
+  tuning: ReturnType<typeof getTuning>;
+  tuningId: string;
+}): Record<string, unknown> {
+  const tunedStrings = input.tuning.strings.filter(
+    (string) => input.lockedStringMidis[string.midi],
+  );
+  const tunedStringCount = tunedStrings.length;
+  const totalStringCount = input.tuning.strings.length;
+  const completionStatus =
+    tunedStringCount === totalStringCount
+      ? "completed"
+      : tunedStringCount > 0
+        ? "partial"
+        : "stopped";
+  return {
+    completionStatus,
+    resultSummary: `${tunedStringCount}/${totalStringCount} strings in tune`,
+    tuningResult: {
+      tuningId: input.tuningId,
+      tuningName: input.tuning.name,
+      tunedStringCount,
+      totalStringCount,
+      tunedStrings: tunedStrings.map((string) => `${string.note}${string.octave}`),
+      lastDetectedHz: Number.isFinite(input.hz) ? input.hz : null,
+      lastDetectedNote: input.noteLabel,
+    },
+  };
 }

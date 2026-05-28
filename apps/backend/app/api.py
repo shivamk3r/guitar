@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from .schemas import (
     RecordingConsentCreate,
     RecordingConsentOut,
     RecordingOut,
+    SessionHistoryOut,
     SessionClose,
     SessionCreate,
     SessionOut,
@@ -80,6 +81,8 @@ def close_session(
 ) -> models.LearningSession:
     session = require_session(db, session_id)
     session.ended_at = payload.ended_at or datetime.now(timezone.utc)
+    if payload.client_metadata:
+        session.client_metadata = {**(session.client_metadata or {}), **payload.client_metadata}
     db.commit()
     db.refresh(session)
     return session
@@ -142,6 +145,42 @@ def upload_recording(
     return recording
 
 
+@router.get("/learners/{learner_id}/history", response_model=list[SessionHistoryOut])
+def get_history(learner_id: str, db: Session = Depends(get_db)) -> list[SessionHistoryOut]:
+    require_learner(db, learner_id)
+    sessions = db.scalars(
+        select(models.LearningSession)
+        .where(models.LearningSession.learner_id == learner_id)
+        .order_by(models.LearningSession.started_at.desc()),
+    ).all()
+    return [build_history_session(session) for session in sessions]
+
+
+@router.get("/sessions/{session_id}", response_model=SessionHistoryOut)
+def get_session_detail(session_id: str, db: Session = Depends(get_db)) -> SessionHistoryOut:
+    return build_history_session(require_session(db, session_id))
+
+
+@router.get("/recordings/{recording_id}/media")
+def get_recording_media(
+    recording_id: str,
+    db: Session = Depends(get_db),
+    storage: ObjectStorage = Depends(get_object_storage),
+) -> Response:
+    recording = db.get(models.AudioRecording, recording_id)
+    if recording is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="recording not found")
+    body = storage.get_recording(recording.object_key)
+    return Response(
+        content=body,
+        media_type=recording.content_type,
+        headers={
+            "Content-Length": str(recording.size_bytes),
+            "Cache-Control": "private, max-age=300",
+        },
+    )
+
+
 @router.get("/learners/{learner_id}/progress", response_model=ProgressOut)
 def get_progress(learner_id: str, db: Session = Depends(get_db)) -> ProgressOut:
     require_learner(db, learner_id)
@@ -177,3 +216,82 @@ def require_session(db: Session, session_id: str) -> models.LearningSession:
     if session is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
     return session
+
+
+def build_history_session(session: models.LearningSession) -> SessionHistoryOut:
+    metadata = session.client_metadata or {}
+    return SessionHistoryOut(
+        id=session.id,
+        learner_id=session.learner_id,
+        activity_type=session.activity_type,
+        started_at=session.started_at,
+        ended_at=session.ended_at,
+        client_metadata=metadata,
+        duration_seconds=duration_seconds(session.started_at, session.ended_at),
+        completion_status=str(
+            metadata.get("completionStatus") or ("completed" if session.ended_at else "in_progress"),
+        ),
+        score=extract_score(metadata),
+        result_summary=extract_result_summary(metadata),
+        recording_available=len(session.recordings) > 0,
+        recordings=list(session.recordings),
+    )
+
+
+def duration_seconds(started_at: datetime, ended_at: datetime | None) -> int | None:
+    if ended_at is None:
+        return None
+    return max(0, round((ended_at - started_at).total_seconds()))
+
+
+def extract_score(metadata: dict) -> float | None:
+    candidates = [
+        metadata.get("score"),
+        metadata.get("averageScore"),
+        nested(metadata, "scoreSummary", "averageScore"),
+        nested(metadata, "scoreSummary", "lastScore"),
+        nested(metadata, "result", "score"),
+    ]
+    for candidate in candidates:
+        if is_number(candidate):
+            return float(candidate)
+    return None
+
+
+def extract_result_summary(metadata: dict) -> str | None:
+    explicit = metadata.get("resultSummary")
+    if isinstance(explicit, str) and explicit:
+        return explicit
+
+    tuning = metadata.get("tuningResult")
+    if isinstance(tuning, dict):
+        tuned = tuning.get("tunedStringCount")
+        total = tuning.get("totalStringCount")
+        if isinstance(tuned, int) and isinstance(total, int):
+            return f"{tuned}/{total} strings in tune"
+
+    score_summary = metadata.get("scoreSummary")
+    if isinstance(score_summary, dict):
+        average_score = score_summary.get("averageScore")
+        attempts = score_summary.get("attempts")
+        if is_number(average_score):
+            if isinstance(attempts, int):
+                return f"{average_score:.1f}/10 average across {attempts} attempts"
+            return f"{average_score:.1f}/10 average"
+
+    attempts = metadata.get("attempts")
+    if isinstance(attempts, list):
+        return f"{len(attempts)} attempts"
+
+    return None
+
+
+def nested(metadata: dict, parent: str, child: str) -> object:
+    value = metadata.get(parent)
+    if not isinstance(value, dict):
+        return None
+    return value.get(child)
+
+
+def is_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)

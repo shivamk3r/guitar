@@ -15,6 +15,8 @@ export function ChordChangeDrillPage() {
     chords,
     beatsPerChange,
     bpm: 60,
+    practiceMode: "chord_change_drill",
+    title: "Chord change drill",
   });
 
   const events = usePractice((s) => s.events);

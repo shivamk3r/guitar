@@ -5,6 +5,7 @@ test.describe("navigation", () => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Tuner" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Start listening" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Audio input selector" })).toBeVisible();
   });
 
   test("can navigate between the primary sections", async ({ page }) => {
@@ -15,8 +16,31 @@ test.describe("navigation", () => {
     await expect(page.getByRole("heading", { name: "Practice" })).toBeVisible();
     await page.getByRole("link", { name: "Learn" }).click();
     await expect(page.getByRole("heading", { name: "Learn" })).toBeVisible();
-    await page.getByRole("link", { name: "Tuner" }).click();
+    await page.getByRole("link", { name: "History" }).click();
+    await expect(page.getByRole("heading", { name: "History" })).toBeVisible();
+    await page
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("link", { name: "Tuner" })
+      .click();
     await expect(page.getByRole("heading", { name: "Tuner" })).toBeVisible();
+  });
+
+  test("floating microphone selector is available across routes", async ({ page }) => {
+    await page.goto("/learn");
+
+    const selector = page.getByRole("region", { name: "Audio input selector" });
+    await expect(selector).toBeVisible();
+    await expect(selector.getByLabel("Microphone")).toBeVisible();
+
+    await page.getByRole("button", { name: "Minimize audio input selector" }).click();
+    await expect(page.getByRole("button", { name: "Expand audio input selector" })).toBeVisible();
+
+    await page.getByRole("link", { name: "Practice" }).click();
+    await expect(page.getByRole("heading", { name: "Practice" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Expand audio input selector" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Expand audio input selector" }).click();
+    await expect(page.getByRole("region", { name: "Audio input selector" })).toBeVisible();
   });
 
   test("learn glossary supports search, category filters, and concept pages", async ({ page }) => {

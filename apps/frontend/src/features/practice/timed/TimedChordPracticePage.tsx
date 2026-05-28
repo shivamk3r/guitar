@@ -4,7 +4,6 @@ import {
   type TimedPracticeCountInBeats,
 } from "@/storage/preferences";
 import { useSettings } from "@/storage/settings-store";
-import { AudioInputSelect } from "@/ui/AudioInputSelect";
 import { Button } from "@/ui/Button";
 import { Fretboard, type StringState } from "@/ui/Fretboard";
 import { LearnTermLink } from "@/ui/LearnTermLink";
@@ -22,9 +21,10 @@ import type {
 import { buildTimedPracticePlan } from "./timed-practice";
 import {
   beatToTimelinePercent,
+  formatTimelineBeatLabel,
   getCenteredBeatWindow,
   getVisibleBeatCount,
-  getVisibleWholeBeats,
+  getVisibleTimelineBeats,
   isTimelinePercentVisible,
 } from "./timeline-view";
 import {
@@ -107,7 +107,6 @@ export function TimedChordPracticePage() {
             </p>
           </div>
           <div className="flex items-start gap-3 flex-wrap justify-end">
-            <AudioInputSelect disabled={session.running} />
             <NumberField
               label="BPM"
               min={40}
@@ -222,13 +221,14 @@ export function TimedChordPracticePage() {
               <div className="text-5xl font-semibold mb-3">{currentChord.name}</div>
               {session.phase === "count-in" && (
                 <div
-                  className="mb-4 rounded-md border border-accent/30 bg-accent/10 px-4 py-3 text-center"
+                  className="mb-4 inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm"
                   aria-live="polite"
                 >
-                  <div className="text-xs uppercase tracking-wide text-accent">Count-in</div>
-                  <div className="text-4xl font-semibold tabular-nums">
-                    {session.countInRemainingBeats}
-                  </div>
+                  <span className="text-xs uppercase tracking-wide text-accent">Count-in</span>
+                  <span className="font-semibold tabular-nums">
+                    {" "}
+                    {formatTimelineBeatLabel(-session.countInRemainingBeats)}
+                  </span>
                 </div>
               )}
               <Fretboard chord={currentChord} stringStates={stringStates} size="lg" />
@@ -274,9 +274,10 @@ export function TimedChordPracticePage() {
             plan={session.plan.length > 0 ? session.plan : previewPlan}
             attempts={session.attempts}
             strumMarkers={session.strumMarkers}
-            playheadBeat={session.playheadBeat}
+            timelineBeat={session.timelineBeat}
             running={session.running}
             sessionLength={sessionLength}
+            countInBeats={settings.timedPracticeCountInBeats}
           />
 
           <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-6 mt-6">
@@ -494,29 +495,33 @@ function BeatTimeline({
   plan,
   attempts,
   strumMarkers,
-  playheadBeat,
+  timelineBeat,
   running,
   sessionLength,
+  countInBeats,
 }: {
   bpm: number;
   beatsPerChord: number;
   plan: TimedPracticePlanItem[];
   attempts: TimedPracticeAttempt[];
   strumMarkers: TimedPracticeStrumMarker[];
-  playheadBeat: number;
+  timelineBeat: number;
   running: boolean;
   sessionLength: number;
+  countInBeats: TimedPracticeCountInBeats;
 }) {
   const totalBeats = Math.max(1, sessionLength * beatsPerChord);
   const visibleBeats = getVisibleBeatCount(bpm);
-  const timelineWindow = getCenteredBeatWindow({ playheadBeat, visibleBeats });
+  const timelineWindow = getCenteredBeatWindow({ playheadBeat: timelineBeat, visibleBeats });
   const beatMs = 60000 / bpm;
   const windowBeats = TIMED_PRACTICE_WINDOW_MS / beatMs;
   const windowWidthPercent = Math.max(3, (windowBeats * 2 * 100) / timelineWindow.visibleBeats);
   const attemptByIndex = new Map(attempts.map((attempt) => [attempt.expectedIndex, attempt]));
-  const visibleWholeBeats = getVisibleWholeBeats(timelineWindow).filter(
-    (beat) => beat >= 0 && beat <= totalBeats,
-  );
+  const visibleWholeBeats = getVisibleTimelineBeats({
+    window: timelineWindow,
+    minBeat: running ? -countInBeats : 0,
+    maxBeat: totalBeats,
+  });
 
   return (
     <div className="bg-panel rounded-lg p-5 border border-white/5">
@@ -535,8 +540,8 @@ function BeatTimeline({
             }
           >
             Yellow bars are the acceptable strum windows around each expected chord beat. Play when
-            a chord window reaches the center line. The app scores timing, chord correctness, and
-            string cleanliness.
+            a chord window reaches the center line. Negative beat numbers are count-in; scoring
+            starts at 0. The app scores timing, chord correctness, and string cleanliness.
           </InfoPopover>
         </div>
         <div className="text-xs text-muted tabular-nums">
@@ -561,7 +566,7 @@ function BeatTimeline({
               style={{ left: `${left}%` }}
             >
               <div className="absolute top-full mt-1 -translate-x-1/2 text-[10px] text-muted tabular-nums">
-                {beat + 1}
+                {formatTimelineBeatLabel(beat)}
               </div>
             </div>
           );
@@ -590,7 +595,9 @@ function BeatTimeline({
                       : "border-warn/60 bg-warn/15 text-ink",
                 )}
                 style={{ left: `${left}%`, width: `${windowWidthPercent}%` }}
-                aria-label={`${item.chordId} strum window at beat ${item.beat + 1}`}
+                aria-label={`${item.chordId} strum window at beat ${formatTimelineBeatLabel(
+                  item.beat,
+                )}`}
               >
                 <span className="truncate px-1">{item.chordId}</span>
                 {attempt?.status === "hit" && (

@@ -229,7 +229,11 @@ class AnalyzerProcessor extends AudioWorkletProcessor {
 
     const len = this.ring.length;
     for (let i = 0; i < ch.length; i++) {
-      this.ring[this.ringWrite] = ch[i];
+      let sample = 0;
+      for (let channel = 0; channel < input.length; channel++) {
+        sample += input[channel]?.[i] ?? 0;
+      }
+      this.ring[this.ringWrite] = sample / input.length;
       this.ringWrite = (this.ringWrite + 1) % len;
     }
     this.samplesSinceHop += ch.length;

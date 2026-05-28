@@ -33,7 +33,13 @@ function ProgressionInner({
   title: string;
   bpm: number;
 }) {
-  const session = useDrillSession({ chords, beatsPerChange: 4, bpm });
+  const session = useDrillSession({
+    chords,
+    beatsPerChange: 4,
+    bpm,
+    practiceMode: "progression_drill",
+    title,
+  });
   if (chords.length === 0) return <div>Progression has no valid chords.</div>;
   const currentChord = chords[session.currentIndex % chords.length]!;
   const upcoming = chords[(session.currentIndex + 1) % chords.length] ?? null;
