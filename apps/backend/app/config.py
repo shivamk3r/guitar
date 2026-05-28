@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://guitar:guitar@postgres:5432/guitar"
-    cors_allowed_origins: str = "http://localhost:5173"
+    cors_allowed_origins: str = "http://localhost:7653"
 
     aws_region: str = "us-east-1"
     aws_access_key_id: str = "test"

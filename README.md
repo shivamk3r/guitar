@@ -32,11 +32,12 @@ docker compose up --build
 
 Services:
 
-- Frontend: `http://localhost:5173`
-- API: `http://localhost:8000`
-- MinIO console: `http://localhost:9001`
-- LocalStack edge: `http://localhost:4566`
-- Postgres: `localhost:5432`
+- Frontend: `http://localhost:7653`
+- API: `http://localhost:7654`
+- Postgres: `localhost:7655`
+- MinIO API: `http://localhost:7656`
+- MinIO console: `http://localhost:7657`
+- LocalStack edge: `http://localhost:7658`
 
 Frontend-only development is still available:
 

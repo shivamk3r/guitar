@@ -85,12 +85,12 @@ The API uses anonymous learner profiles for now. Account auth is a later milesto
 
 `docker compose up --build` runs:
 
-- `frontend` on `http://localhost:5173`
-- `api` on `http://localhost:8000`
+- `frontend` on `http://localhost:7653`
+- `api` on `http://localhost:7654`
 - `worker`
-- `postgres` on `localhost:5432`
-- `minio` on `localhost:9000` and console on `localhost:9001`
-- `localstack` on `localhost:4566`
+- `postgres` on `localhost:7655`
+- `minio` on `localhost:7656` and console on `localhost:7657`
+- `localstack` on `localhost:7658`
 
 Persistent Docker volumes keep Postgres, MinIO, and LocalStack state across restarts.
 

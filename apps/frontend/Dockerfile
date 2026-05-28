@@ -11,6 +11,6 @@ RUN pnpm install --filter @guitar/frontend --frozen-lockfile
 COPY apps/frontend apps/frontend
 
 WORKDIR /workspace/apps/frontend
-EXPOSE 5173
+EXPOSE 7653
 
 CMD ["pnpm", "dev"]

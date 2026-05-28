@@ -13,6 +13,11 @@ export default defineConfig({
     format: "es",
   },
   server: {
-    port: 5173,
+    port: 7653,
+    strictPort: true,
+  },
+  preview: {
+    port: 7659,
+    strictPort: true,
   },
 });
