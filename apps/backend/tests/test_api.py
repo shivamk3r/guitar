@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.api import router
 from app.database import Base, get_db
 from app.queue import get_analysis_queue
-from app.storage import get_object_storage
+from app.storage import get_object_storage, recording_file_extension
 
 
 class FakeStorage:
@@ -29,7 +29,8 @@ class FakeStorage:
         content_type: str,
     ) -> tuple[str, int]:
         content = file_obj.read()
-        key = f"learners/{learner_id}/sessions/{session_id}/recordings/{recording_id}.webm"
+        extension = recording_file_extension(content_type)
+        key = f"learners/{learner_id}/sessions/{session_id}/recordings/{recording_id}.{extension}"
         self.saved.append((key, content, content_type))
         self.objects[key] = content
         return key, len(content)
@@ -194,7 +195,7 @@ def test_recording_media_is_replayable_for_saved_recording(tmp_path: Path) -> No
 
     upload_response = client.post(
         f"/v1/sessions/{session['id']}/recordings",
-        files={"file": ("clip.webm", b"playable-audio", "audio/webm")},
+        files={"file": ("clip.wav", b"playable-audio", "audio/wav")},
     )
     assert upload_response.status_code == 201
     recording_id = upload_response.json()["id"]
@@ -207,5 +208,6 @@ def test_recording_media_is_replayable_for_saved_recording(tmp_path: Path) -> No
     media_response = client.get(f"/v1/recordings/{recording_id}/media")
     assert media_response.status_code == 200
     assert media_response.content == b"playable-audio"
-    assert media_response.headers["content-type"] == "audio/webm"
+    assert media_response.headers["content-type"] == "audio/wav"
     assert storage.saved[0][1] == b"playable-audio"
+    assert storage.saved[0][0].endswith(".wav")

@@ -28,6 +28,7 @@ export interface AudioEngine {
 }
 
 const WORKLET_URL = "/analyzer.worklet.js";
+const DEFAULT_SAMPLE_RATE = 48000;
 
 export function createAudioEngine(options: AudioEngineOptions = {}): AudioEngine {
   const emitter = new Emitter<AudioEventMap>();
@@ -51,7 +52,7 @@ export function createAudioEngine(options: AudioEngineOptions = {}): AudioEngine
     setState("starting");
     try {
       ctx = new AudioContext({
-        sampleRate: options.sampleRate ?? 48000,
+        sampleRate: options.sampleRate ?? DEFAULT_SAMPLE_RATE,
         latencyHint: "interactive",
       });
       // AudioContext may start suspended if called before user gesture — resume defensively.
@@ -60,12 +61,12 @@ export function createAudioEngine(options: AudioEngineOptions = {}): AudioEngine
       inputFallback = null;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          audio: createAudioConstraints(inputDeviceId),
+          audio: createAudioConstraints(inputDeviceId, options.sampleRate ?? DEFAULT_SAMPLE_RATE),
         });
       } catch (err) {
         if (!inputDeviceId || !isUnavailableInputError(err)) throw err;
         stream = await navigator.mediaDevices.getUserMedia({
-          audio: createAudioConstraints(null),
+          audio: createAudioConstraints(null, options.sampleRate ?? DEFAULT_SAMPLE_RATE),
         });
         inputFallback = { requestedDeviceId: inputDeviceId, reason: "unavailable" };
       }
@@ -171,12 +172,15 @@ export function createAudioEngine(options: AudioEngineOptions = {}): AudioEngine
   };
 }
 
-function createAudioConstraints(deviceId: string | null): MediaTrackConstraints {
+function createAudioConstraints(
+  deviceId: string | null,
+  sampleRate: number,
+): MediaTrackConstraints {
   const audioConstraints: MediaTrackConstraints = {
-    echoCancellation: true,
-    noiseSuppression: true,
+    echoCancellation: false,
+    noiseSuppression: false,
     autoGainControl: false,
-    channelCount: 1,
+    sampleRate: { ideal: sampleRate },
   };
   if (deviceId) audioConstraints.deviceId = { exact: deviceId };
   return audioConstraints;

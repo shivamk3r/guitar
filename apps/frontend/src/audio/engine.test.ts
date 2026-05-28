@@ -55,6 +55,14 @@ describe("createAudioEngine input device selection", () => {
     expect(getUserMedia).toHaveBeenCalledWith({
       audio: expect.objectContaining({ deviceId: { exact: "usb-1" } }),
     });
+    const audioConstraints = getUserMedia.mock.calls[0]?.[0].audio as MediaTrackConstraints;
+    expect(audioConstraints).toMatchObject({
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+      sampleRate: { ideal: 48000 },
+    });
+    expect(audioConstraints).not.toHaveProperty("channelCount");
     expect(engine.activeInput).toEqual({ deviceId: "usb-1", label: "USB Interface" });
     expect(engine.inputFallback).toBeNull();
 

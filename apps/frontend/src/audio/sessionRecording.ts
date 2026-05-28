@@ -8,11 +8,16 @@ import {
 } from "@/api/client";
 import type { SettingsRow } from "@/storage/db";
 import type { AudioEngine } from "./engine";
+import { startRawPcmRecorder } from "./rawPcmRecorder";
 
 export interface ActiveRecordedSession {
   sessionId: string;
   recordingEnabled: boolean;
   stop(finalMetadata?: Record<string, unknown>): Promise<void>;
+}
+
+interface SessionRecorder {
+  stop(): Promise<Blob>;
 }
 
 export async function startActivitySession(input: {
@@ -31,12 +36,12 @@ export async function startActivitySession(input: {
     onProfile: (profile) => input.updateSettings(profile),
   });
 
-  const recordingEnabled =
+  const recordingRequested =
     input.settings.recordingConsentGranted &&
     !!input.engine.mediaStream &&
-    typeof MediaRecorder !== "undefined";
+    (!!input.engine.ctx || typeof MediaRecorder !== "undefined");
 
-  if (recordingEnabled) {
+  if (recordingRequested) {
     await saveRecordingConsent({
       learnerId: learner.id,
       granted: true,
@@ -56,27 +61,22 @@ export async function startActivitySession(input: {
   });
 
   const capturedAtIso = new Date().toISOString();
-  const chunks: BlobPart[] = [];
-  let recorder: MediaRecorder | null = null;
-  if (recordingEnabled && input.engine.mediaStream) {
-    const mimeType = supportedMimeType();
-    recorder = mimeType
-      ? new MediaRecorder(input.engine.mediaStream, { mimeType })
-      : new MediaRecorder(input.engine.mediaStream);
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) chunks.push(event.data);
-    };
-    recorder.start(5000);
+  let recorder: SessionRecorder | null = null;
+  if (recordingRequested && input.engine.mediaStream) {
+    recorder = await startSessionRecorder(input.engine).catch((err) => {
+      console.error("raw session recorder failed", err);
+      return null;
+    });
   }
 
   return {
     sessionId: session.id,
-    recordingEnabled,
+    recordingEnabled: recorder !== null,
     async stop(finalMetadata) {
       let uploadError: unknown = null;
       try {
         if (recorder) {
-          const blob = await stopRecorder(recorder, chunks);
+          const blob = await recorder.stop();
           if (blob.size > 0) {
             await uploadRecording({ sessionId: session.id, blob, capturedAtIso });
           }
@@ -92,12 +92,50 @@ export async function startActivitySession(input: {
 
 export const startRecordedSession = startActivitySession;
 
+async function startSessionRecorder(engine: AudioEngine): Promise<SessionRecorder> {
+  if (!engine.mediaStream) {
+    throw new Error("No microphone stream is available for recording.");
+  }
+
+  if (engine.ctx) {
+    try {
+      return await startRawPcmRecorder({
+        ctx: engine.ctx,
+        mediaStream: engine.mediaStream,
+      });
+    } catch (err) {
+      if (typeof MediaRecorder === "undefined") throw err;
+      console.warn("Falling back to compressed MediaRecorder capture.", err);
+    }
+  }
+
+  if (typeof MediaRecorder === "undefined") {
+    throw new Error("Session recording is not supported in this browser.");
+  }
+  return startMediaRecorder(engine.mediaStream);
+}
+
+function startMediaRecorder(mediaStream: MediaStream): SessionRecorder {
+  const chunks: BlobPart[] = [];
+  const mimeType = supportedMimeType();
+  const recorder = mimeType
+    ? new MediaRecorder(mediaStream, { mimeType })
+    : new MediaRecorder(mediaStream);
+  recorder.ondataavailable = (event) => {
+    if (event.data.size > 0) chunks.push(event.data);
+  };
+  recorder.start(5000);
+  return {
+    stop: () => stopMediaRecorder(recorder, chunks),
+  };
+}
+
 function supportedMimeType(): string {
   const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
   return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
 }
 
-function stopRecorder(recorder: MediaRecorder, chunks: BlobPart[]): Promise<Blob> {
+function stopMediaRecorder(recorder: MediaRecorder, chunks: BlobPart[]): Promise<Blob> {
   return new Promise((resolve) => {
     recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType || "audio/webm" }));
     if (recorder.state === "inactive") {

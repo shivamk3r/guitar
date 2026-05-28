@@ -100,6 +100,7 @@ The product closes the loop between "I played something" and "what should I do n
 - **AR-6** Backend analysis is asynchronous and may use classical DSP, ML, or hybrid models in later milestones.
 - **AR-7** Browser audio input selection uses the selected `audioinput` device for realtime DSP and consented recording, falls back to browser default if the preferred device is unavailable, and disables switching during active scored or recorded sessions.
 - **AR-8** Microphone labels and device identifiers remain local browser UI/preference state and are not included in recording session metadata by default.
+- **AR-9** Browser microphone capture requests speech processing disabled (`echoCancellation`, `noiseSuppression`, and `autoGainControl`) so guitar recordings keep harmonics, sustain, and room detail. Consented recordings are saved as raw PCM WAV before app analysis filters; compressed browser recording is only a fallback when raw capture is unavailable.
 
 ## 7. Data Model
 

@@ -32,7 +32,7 @@
 
 ## Frontend Notes
 
-Immediate tuner, chord, and rhythm feedback remains browser-side to meet latency requirements. The frontend uploads completed consented recordings to the API; it does not upload high-frequency audio analysis events.
+Immediate tuner, chord, and rhythm feedback remains browser-side to meet latency requirements. The frontend records consented sessions from the unprocessed mic stream as PCM WAV before app analysis, uploads completed recordings to the API, and does not upload high-frequency audio analysis events.
 
 ## Backend Notes
 

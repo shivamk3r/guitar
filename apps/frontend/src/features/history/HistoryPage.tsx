@@ -317,21 +317,48 @@ function RecordingPanel({ session }: { session: SessionHistoryItem }) {
     <div className="bg-panel border border-white/5 rounded-lg p-5">
       <h3 className="text-sm uppercase tracking-wide text-muted mb-3">Recording</h3>
       <div className="space-y-3">
-        {session.recordings.map((recording) => (
-          <div key={recording.id}>
-            {/* biome-ignore lint/a11y/useMediaCaption: Learner recordings are instrumental practice audio without speech captions. */}
-            <audio
-              controls
-              preload="metadata"
-              src={recordingMediaUrl(recording.id)}
-              className="w-full"
-            />
-            <div className="mt-1 text-xs text-muted">
-              {Math.round(recording.size_bytes / 1024)} KB · {recording.content_type}
+        {session.recordings.map((recording) => {
+          const mediaUrl = recordingMediaUrl(recording.id);
+          return (
+            <div key={recording.id}>
+              {/* biome-ignore lint/a11y/useMediaCaption: Learner recordings are instrumental practice audio without speech captions. */}
+              <audio controls preload="metadata" src={mediaUrl} className="w-full" />
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+                <span>
+                  {Math.round(recording.size_bytes / 1024)} KB ·{" "}
+                  {recordingContentLabel(recording.content_type)}
+                </span>
+                <a
+                  href={mediaUrl}
+                  download={`guitar-session-${recording.id}.${recordingExtension(
+                    recording.content_type,
+                  )}`}
+                  className="text-accent hover:underline"
+                >
+                  Download raw audio
+                </a>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
+}
+
+function recordingContentLabel(contentType: string): string {
+  const normalized = contentType.split(";")[0]?.trim().toLowerCase();
+  if (normalized === "audio/wav" || normalized === "audio/wave" || normalized === "audio/x-wav") {
+    return "Raw PCM WAV";
+  }
+  return contentType;
+}
+
+function recordingExtension(contentType: string): string {
+  const normalized = contentType.split(";")[0]?.trim().toLowerCase();
+  if (normalized === "audio/wav" || normalized === "audio/wave" || normalized === "audio/x-wav") {
+    return "wav";
+  }
+  if (normalized === "audio/mp4") return "mp4";
+  return "webm";
 }

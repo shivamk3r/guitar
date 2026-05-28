@@ -97,7 +97,11 @@ export async function uploadRecording(input: {
   capturedAtIso: string;
 }): Promise<void> {
   const body = new FormData();
-  body.append("file", input.blob, `session-${input.sessionId}.webm`);
+  body.append(
+    "file",
+    input.blob,
+    `session-${input.sessionId}.${recordingExtension(input.blob.type)}`,
+  );
   body.append("captured_at", input.capturedAtIso);
   const response = await fetch(`${API_BASE_URL}/v1/sessions/${input.sessionId}/recordings`, {
     method: "POST",
@@ -116,6 +120,15 @@ export async function fetchSessionDetail(sessionId: string): Promise<SessionHist
 
 export function recordingMediaUrl(recordingId: string): string {
   return `${API_BASE_URL}/v1/recordings/${recordingId}/media`;
+}
+
+function recordingExtension(contentType: string): string {
+  const normalized = contentType.split(";")[0]?.trim().toLowerCase();
+  if (normalized === "audio/wav" || normalized === "audio/wave" || normalized === "audio/x-wav") {
+    return "wav";
+  }
+  if (normalized === "audio/mp4") return "mp4";
+  return "webm";
 }
 
 async function getJson<T>(path: string): Promise<T> {
