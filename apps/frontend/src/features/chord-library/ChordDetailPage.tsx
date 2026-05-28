@@ -5,7 +5,6 @@ import { type ChordDef, getChord, playedNotes } from "@/data/chords";
 import { type ScoredEvent, type StringClass, scoreEvent } from "@/features/practice/scoring";
 import { useProgress } from "@/storage/progress-store";
 import { useSettings } from "@/storage/settings-store";
-import { AudioInputSelect } from "@/ui/AudioInputSelect";
 import { Button } from "@/ui/Button";
 import { Fretboard, type StringState } from "@/ui/Fretboard";
 import { LearnTermLink } from "@/ui/LearnTermLink";
@@ -189,7 +188,6 @@ function ChordDetailInner({ chordId }: { chordId: string }) {
             ))}
           </div>
         </div>
-        <AudioInputSelect disabled={engineState === "running"} />
       </header>
 
       <div className="grid md:grid-cols-2 gap-6">

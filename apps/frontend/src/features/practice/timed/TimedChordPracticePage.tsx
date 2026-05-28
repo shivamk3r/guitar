@@ -4,7 +4,6 @@ import {
   type TimedPracticeCountInBeats,
 } from "@/storage/preferences";
 import { useSettings } from "@/storage/settings-store";
-import { AudioInputSelect } from "@/ui/AudioInputSelect";
 import { Button } from "@/ui/Button";
 import { Fretboard, type StringState } from "@/ui/Fretboard";
 import { LearnTermLink } from "@/ui/LearnTermLink";
@@ -108,7 +107,6 @@ export function TimedChordPracticePage() {
             </p>
           </div>
           <div className="flex items-start gap-3 flex-wrap justify-end">
-            <AudioInputSelect disabled={session.running} />
             <NumberField
               label="BPM"
               min={40}

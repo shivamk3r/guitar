@@ -2,7 +2,6 @@ import { ensureLearnerProfile, saveRecordingConsent } from "@/api/client";
 import { TUNINGS } from "@/data/tunings";
 import { useProgress } from "@/storage/progress-store";
 import { useSettings } from "@/storage/settings-store";
-import { AudioInputSelect } from "@/ui/AudioInputSelect";
 import { Button } from "@/ui/Button";
 import { useState } from "react";
 
@@ -63,8 +62,6 @@ export function SettingsPage() {
             ))}
           </select>
         </Field>
-
-        <AudioInputSelect />
 
         <Field label="Audible metronome">
           <input

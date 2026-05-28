@@ -12,6 +12,7 @@ import { SettingsPage } from "@/features/settings/SettingsPage";
 import { TunerPage } from "@/features/tuner/TunerPage";
 import { useProgress } from "@/storage/progress-store";
 import { useSettings } from "@/storage/settings-store";
+import { FloatingAudioInputControl } from "@/ui/FloatingAudioInputControl";
 import { clsx } from "@/ui/clsx";
 import { Suspense, useEffect } from "react";
 import { Link, NavLink, Route, Routes } from "react-router-dom";
@@ -88,6 +89,8 @@ export function App() {
           Real-time feedback stays in the browser. Consented recordings sync to your local backend.
         </div>
       </footer>
+
+      <FloatingAudioInputControl />
     </div>
   );
 }

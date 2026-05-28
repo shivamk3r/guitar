@@ -3,7 +3,6 @@ import { ensureEngineStarted, getEngine, useEngineState } from "@/audio/useAudio
 import { type StringTuning, TUNINGS, getTuning } from "@/data/tunings";
 import { NOTE_NAMES } from "@/lib/math";
 import { useSettings } from "@/storage/settings-store";
-import { AudioInputSelect } from "@/ui/AudioInputSelect";
 import { Button } from "@/ui/Button";
 import { LearnTermLink } from "@/ui/LearnTermLink";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -142,7 +141,6 @@ export function TunerPage() {
           </p>
         </div>
         <div className="flex items-start gap-3 flex-wrap justify-end">
-          <AudioInputSelect />
           <label className="text-sm text-muted">
             Tuning
             <select
