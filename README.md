@@ -68,24 +68,26 @@ python3 -m pytest
 
 ### Chord Detection Evals
 
-Offline chord detection evals benchmark the browser chord matcher against public labelled guitar datasets. They are manual because the first full run downloads about 2.1 GB of cached dataset files.
+Offline chord detection evals benchmark the browser production detector and the Python research bench against public labelled guitar datasets. They are manual because the first full run downloads about 2.1 GB of cached dataset files.
 
 ```sh
 pnpm eval:chords:prepare
 pnpm eval:chords
+pnpm eval:chords:frontend
+pnpm eval:chords:python
+pnpm eval:chords:compare
 pnpm eval:chords -- --limit 100
 pnpm eval:chords -- --force
 ```
 
-Datasets and per-sample results are cached in `.eval-cache/chord-detection/`, which is ignored by git. The latest full baseline report is written to `.eval-cache/chord-detection/reports/latest.md`; see [apps/frontend/evals/chord-detection/README.md](apps/frontend/evals/chord-detection/README.md) for details.
+Datasets and per-sample results are cached in `.eval-cache/chord-detection/`, which is ignored by git. Latest reports are written under `.eval-cache/chord-detection/reports/{frontend,python,comparison}/`; see [apps/frontend/evals/chord-detection/README.md](apps/frontend/evals/chord-detection/README.md) for details.
 
-Current full eval baseline, generated 2026-05-29 IST from algorithm fingerprint `55679441ce783a38`:
+Current full target-aware evals, generated 2026-05-29 IST:
 
-| Scope | Evaluated | Accuracy | Verifier recall | Wrong accepted |
-| --- | ---: | ---: | ---: | ---: |
-| Overall | 955 | 22.8% | 22.8% | 77.2% |
-| Isolated Guitar Chords | 54 | 16.7% | 16.7% | 83.3% |
-| GuitarSet | 901 | 23.2% | 23.2% | 76.8% |
+| Implementation | Evaluated | Top-1 accuracy | Verifier recall | False accept trials | Wrong-accept samples |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Frontend `b2bc7dcc3144d973` | 955 | 14.3% | 10.1% | 0.7% | 11.8% |
+| Python `8f17959faef3430b` | 955 | 14.2% | 9.7% | 0.7% | 11.0% |
 
 ## Privacy and Consent
 

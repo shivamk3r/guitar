@@ -1,4 +1,5 @@
 import type { ChordDef } from "@/data/chords";
+import type { ChordVerifierStatus } from "@/features/chord-library/chord-detection";
 import type { StringClass } from "@/features/practice/scoring";
 import type { ScoredEvent } from "@/features/practice/scoring";
 import { create } from "zustand";
@@ -10,6 +11,8 @@ export interface CheckResult {
   detectedName: string | null;
   similarity: number;
   runnerUpId: string | null;
+  verifierStatus: ChordVerifierStatus;
+  confidence: number;
   stringStates: StringClass[];
   scored: ScoredEvent;
 }

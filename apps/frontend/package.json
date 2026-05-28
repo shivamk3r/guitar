@@ -21,6 +21,7 @@
     "test:e2e": "playwright test",
     "eval:chords": "tsx --tsconfig tsconfig.eval.json evals/chord-detection/cli.ts",
     "eval:chords:prepare": "tsx --tsconfig tsconfig.eval.json evals/chord-detection/cli.ts --prepare-only",
+    "eval:chords:compare": "tsx --tsconfig tsconfig.eval.json evals/chord-detection/compare.ts",
     "lint": "biome check .",
     "format": "biome format --write .",
     "typecheck": "tsc -b --noEmit"

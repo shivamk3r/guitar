@@ -1,4 +1,12 @@
-import { classifyStrings, expectedRingsMask, matchChord } from "@/audio/chord-detection";
+import {
+  type ChordVerifierStatus,
+  type ChromaFrame,
+  aggregateChromaFrames,
+  classifyStrings,
+  expectedRingsMask,
+  matchChord,
+  verifyChord,
+} from "@/audio/chord-detection";
 import { type ActiveRecordedSession, startRecordedSession } from "@/audio/sessionRecording";
 import { ensureEngineStarted, getEngine, useEngineState } from "@/audio/useAudioEngine";
 import { type ChordDef, getChord, playedNotes } from "@/data/chords";
@@ -21,6 +29,8 @@ interface ChordCheckAttemptMetadata {
   expectedChordId: string;
   detectedChordId: string | null;
   detectedChordName: string | null;
+  verifierStatus: ChordVerifierStatus;
+  verifierConfidence: number;
   similarity: number;
   score: ScoredEvent;
   stringStates: StringClass[];
@@ -53,7 +63,7 @@ function ChordDetailInner({ chordId }: { chordId: string }) {
   const settings = useSettings();
   const recordingRef = useRef<ActiveRecordedSession | null>(null);
   const capturingRef = useRef(false);
-  const chromaBuffer = useRef<Float32Array[]>([]);
+  const chromaBuffer = useRef<ChromaFrame[]>([]);
   const attemptsRef = useRef<ChordCheckAttemptMetadata[]>([]);
 
   useEffect(() => {
@@ -73,35 +83,36 @@ function ChordDetailInner({ chordId }: { chordId: string }) {
       // Stop capturing after CAPTURE_MS and analyze
       window.setTimeout(() => {
         capturingRef.current = false;
-        const frames = chromaBuffer.current;
-        if (frames.length === 0) {
+        const aggregate = aggregateChromaFrames(chromaBuffer.current);
+        if (!aggregate.hasSignal) {
           setState("listening");
           return;
         }
-        const avg = new Float32Array(12);
-        for (const f of frames) for (let i = 0; i < 12; i++) avg[i] = (avg[i] ?? 0) + (f[i] ?? 0);
-        for (let i = 0; i < 12; i++) avg[i] = (avg[i] ?? 0) / frames.length;
-        // Renormalize
-        let n = 0;
-        for (let i = 0; i < 12; i++) n += (avg[i] ?? 0) * (avg[i] ?? 0);
-        n = Math.sqrt(n);
-        if (n > 1e-8) for (let i = 0; i < 12; i++) avg[i] = (avg[i] ?? 0) / n;
-
+        const avg = aggregate.avgChroma;
         const match = matchChord(avg, chord);
+        const verification = verifyChord(avg, chord);
+        const detectedChord =
+          verification.status === "accepted"
+            ? chord
+            : verification.status === "rejected"
+              ? getChord(verification.bestAlternativeChordId ?? "")
+              : null;
         const stringStates = classifyStrings(chord, avg);
         const scored = scoreEvent({
-          detectedChordId: match.chord?.id,
+          detectedChordId: detectedChord?.id,
           expectedChordId: chord.id,
-          sameFamily: match.sameFamily,
+          sameFamily: detectedChord != null && detectedChord.root === chord.root,
           strings: stringStates,
           expectedRings: expectedRingsMask(chord),
           timingApplies: false,
         });
         setResult({
-          detectedId: match.chord?.id ?? null,
-          detectedName: match.chord?.name ?? null,
-          similarity: match.similarity,
+          detectedId: detectedChord?.id ?? null,
+          detectedName: detectedChord?.name ?? null,
+          similarity: verification.expectedSimilarity,
           runnerUpId: match.runnerUp?.chord.id ?? null,
+          verifierStatus: verification.status,
+          confidence: verification.confidence,
           stringStates,
           scored,
         });
@@ -110,9 +121,11 @@ function ChordDetailInner({ chordId }: { chordId: string }) {
           {
             atIso: new Date().toISOString(),
             expectedChordId: chord.id,
-            detectedChordId: match.chord?.id ?? null,
-            detectedChordName: match.chord?.name ?? null,
-            similarity: match.similarity,
+            detectedChordId: detectedChord?.id ?? null,
+            detectedChordName: detectedChord?.name ?? null,
+            verifierStatus: verification.status,
+            verifierConfidence: verification.confidence,
+            similarity: verification.expectedSimilarity,
             score: scored,
             stringStates,
           },
@@ -124,7 +137,7 @@ function ChordDetailInner({ chordId }: { chordId: string }) {
     });
     const unsubChroma = engine.on("chroma", (e) => {
       if (!capturingRef.current) return;
-      chromaBuffer.current.push(e.chroma);
+      chromaBuffer.current.push({ chroma: e.chroma, rms: e.rms, t: e.t });
     });
     return () => {
       unsubOnset();

@@ -1,7 +1,7 @@
 import { ChromaExtractor } from "@/audio/dsp/chroma";
 import { FFT } from "@/audio/dsp/fft";
 import { CHORDS, type ChordDef } from "@/data/chords";
-import { matchChord } from "@/features/chord-library/chord-detection";
+import { matchChord, verifyChord } from "@/features/chord-library/chord-detection";
 import { midiToHz } from "@/lib/math";
 import { describe, expect, it } from "vitest";
 
@@ -50,23 +50,19 @@ function chromaFor(midis: readonly (number | null)[]): Float32Array {
   return chroma;
 }
 
-describe("pipeline: synthesize strum → chroma → matchChord", () => {
-  // Chords where the detected chord should match exactly. E and A are excluded
-  // here because harmonic leakage from the fundamental can bias detection toward
-  // their dominant-7th siblings (E7/A7) — a known template-matching limitation.
-  // The root is still correct in those cases, which is what §10.2 calls "same
-  // family" partial credit.
-  it.each(["C", "G", "D", "Am", "Em", "Dm"] as const)(
-    "identifies a synthesized %s chord exactly",
+describe("pipeline: synthesize strum → chroma → target-aware verifier", () => {
+  it.each(["C", "G", "D", "A", "Am", "Em", "Dm", "D7"] as const)(
+    "keeps a synthesized %s chord as a plausible expected target",
     (chordId) => {
       const chord = CHORDS.find((c) => c.id === chordId) as ChordDef;
       const chroma = chromaFor(chord.playedMidi);
-      const match = matchChord(chroma, chord);
-      expect(match.chord?.id).toBe(chordId);
+      const result = verifyChord(chroma, chord);
+      expect(result.status).not.toBe("rejected");
+      expect(result.expectedSimilarity).toBeGreaterThan(0.6);
     },
   );
 
-  it("E and A synthesized chords at minimum resolve to the correct root", () => {
+  it("keeps open-ended matchChord available for debug reporting", () => {
     for (const id of ["E", "A"] as const) {
       const chord = CHORDS.find((c) => c.id === id) as ChordDef;
       const match = matchChord(chromaFor(chord.playedMidi), chord);
@@ -77,23 +73,29 @@ describe("pipeline: synthesize strum → chroma → matchChord", () => {
   it("muting the chord's only F# destroys the D7 match", () => {
     const d7 = CHORDS.find((c) => c.id === "D7") as ChordDef;
     // Full strum
-    const full = matchChord(chromaFor(d7.playedMidi), d7);
+    const full = verifyChord(chromaFor(d7.playedMidi), d7);
     // Remove the high F# (last string) — D7's only F#
     const withoutFsharp = [...d7.playedMidi];
     withoutFsharp[5] = null;
-    const partial = matchChord(chromaFor(withoutFsharp), d7);
-    expect(partial.similarity).toBeLessThan(full.similarity);
+    const partial = verifyChord(chromaFor(withoutFsharp), d7);
+    expect(full.status).not.toBe("rejected");
+    expect(partial.expectedSimilarity).toBeLessThan(full.expectedSimilarity);
+    expect(partial.status).not.toBe("accepted");
   });
 
   it("major vs minor is reliably distinguishable", () => {
     const a = CHORDS.find((c) => c.id === "A") as ChordDef;
     const am = CHORDS.find((c) => c.id === "Am") as ChordDef;
-    const fromA = matchChord(chromaFor(a.playedMidi));
-    const fromAm = matchChord(chromaFor(am.playedMidi));
-    expect(fromA.chord?.root).toBe("A");
-    expect(fromAm.chord?.root).toBe("A");
-    expect(fromA.chord?.quality).toBe("major");
-    expect(fromAm.chord?.quality).toBe("minor");
+    const aChroma = chromaFor(a.playedMidi);
+    const amChroma = chromaFor(am.playedMidi);
+    expect(verifyChord(aChroma, a).expectedSimilarity).toBeGreaterThan(
+      verifyChord(aChroma, am).expectedSimilarity,
+    );
+    expect(verifyChord(amChroma, am).expectedSimilarity).toBeGreaterThan(
+      verifyChord(amChroma, a).expectedSimilarity,
+    );
+    expect(verifyChord(aChroma, am).status).not.toBe("accepted");
+    expect(verifyChord(amChroma, a).status).not.toBe("accepted");
   });
 
   it("transposing a detected chord changes the detected root accordingly", () => {

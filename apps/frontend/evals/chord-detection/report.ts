@@ -10,7 +10,7 @@ export async function writeReports(
   jsonPath: string;
   markdownPath: string;
 }> {
-  const reportsDir = path.join(cacheRoot, "reports");
+  const reportsDir = path.join(cacheRoot, "reports", report.implementation);
   await ensureDir(reportsDir);
   const jsonPath = path.join(reportsDir, "latest.json");
   const markdownPath = path.join(reportsDir, "latest.md");
@@ -19,9 +19,26 @@ export async function writeReports(
   return { jsonPath, markdownPath };
 }
 
+export async function writeComparisonReport(
+  cacheRoot: string,
+  input: { frontend: EvalReport; python: EvalReport },
+): Promise<{ jsonPath: string; markdownPath: string }> {
+  const reportsDir = path.join(cacheRoot, "reports", "comparison");
+  await ensureDir(reportsDir);
+  const generatedAtIso = new Date().toISOString();
+  const jsonPath = path.join(reportsDir, "latest.json");
+  const markdownPath = path.join(reportsDir, "latest.md");
+  await writeFile(
+    jsonPath,
+    `${JSON.stringify({ generatedAtIso, frontend: input.frontend, python: input.python }, null, 2)}\n`,
+  );
+  await writeFile(markdownPath, renderComparisonMarkdown({ generatedAtIso, ...input }));
+  return { jsonPath, markdownPath };
+}
+
 export function renderMarkdownReport(report: EvalReport): string {
   const lines = [
-    "# Chord Detection Eval Report",
+    `# Chord Detection Eval Report (${report.implementation})`,
     "",
     `Generated: ${report.generatedAtIso}`,
     `Algorithm fingerprint: \`${report.algorithmFingerprint}\``,
@@ -32,11 +49,7 @@ export function renderMarkdownReport(report: EvalReport): string {
     "",
     renderMetricsTable([["overall", report.summary], ...datasetRows(report)]),
     "",
-    "## Threshold Sweep",
-    "",
-    renderThresholdTable(report.thresholdSweep),
-    "",
-    "## Per-Chord Baseline",
+    "## Per-Chord Verifier",
     "",
     renderPerChordTable(report.summary),
     "",
@@ -52,6 +65,36 @@ export function renderMarkdownReport(report: EvalReport): string {
   return `${lines.join("\n")}\n`;
 }
 
+export function renderComparisonMarkdown(input: {
+  generatedAtIso: string;
+  frontend: EvalReport;
+  python: EvalReport;
+}): string {
+  const lines = [
+    "# Chord Detection Eval Comparison",
+    "",
+    `Generated: ${input.generatedAtIso}`,
+    "",
+    renderMetricsTable([
+      ["frontend overall", input.frontend.summary],
+      ["python overall", input.python.summary],
+      ...datasetRows(input.frontend).map(
+        ([datasetId, metrics]) => [`frontend ${datasetId}`, metrics] as [string, MetricsReport],
+      ),
+      ...datasetRows(input.python).map(
+        ([datasetId, metrics]) => [`python ${datasetId}`, metrics] as [string, MetricsReport],
+      ),
+    ]),
+    "",
+    "## Fingerprints",
+    "",
+    `- Frontend: \`${input.frontend.algorithmFingerprint}\``,
+    `- Python: \`${input.python.algorithmFingerprint}\``,
+    "",
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
 function datasetRows(report: EvalReport): Array<[string, MetricsReport]> {
   return Object.entries(report.byDataset).flatMap(([datasetId, metrics]) =>
     metrics ? ([[datasetId, metrics]] as Array<[string, MetricsReport]>) : [],
@@ -60,37 +103,22 @@ function datasetRows(report: EvalReport): Array<[string, MetricsReport]> {
 
 function renderMetricsTable(rows: Array<[string, MetricsReport]>): string {
   return [
-    "| Scope | Evaluated | Accuracy | Verifier recall | False reject | Wrong accepted | Unknown |",
-    "|---|---:|---:|---:|---:|---:|---:|",
+    "| Scope | Evaluated | Top-1 accuracy | Verifier recall | Positive rejected | Uncertain | False accept trials | Wrong-accept samples |",
+    "|---|---:|---:|---:|---:|---:|---:|---:|",
     ...rows.map(([label, metrics]) => {
       const summary = metrics.summary;
       return `| ${label} | ${summary.evaluated} | ${pct(summary.accuracy)} | ${pct(
         summary.verifierRecall,
-      )} | ${pct(summary.falseRejectRate)} | ${pct(summary.wrongAcceptedRate)} | ${pct(
-        summary.unknownRate,
-      )} |`;
-    }),
-  ].join("\n");
-}
-
-function renderThresholdTable(metrics: readonly MetricsReport[]): string {
-  return [
-    "| Similarity | Margin | Verifier recall | False reject | Wrong accepted | Unknown |",
-    "|---:|---:|---:|---:|---:|---:|",
-    ...metrics.map((item) => {
-      const summary = item.summary;
-      return `| ${item.threshold.similarity.toFixed(2)} | ${item.threshold.margin.toFixed(
-        2,
-      )} | ${pct(summary.verifierRecall)} | ${pct(summary.falseRejectRate)} | ${pct(
-        summary.wrongAcceptedRate,
-      )} | ${pct(summary.unknownRate)} |`;
+      )} | ${pct(summary.rejectedRate)} | ${pct(summary.unknownRate)} | ${pct(
+        summary.falseAcceptRate,
+      )} | ${pct(summary.wrongAcceptedRate)} |`;
     }),
   ].join("\n");
 }
 
 function renderPerChordTable(metrics: MetricsReport): string {
   return [
-    "| Chord | Support | Precision | Recall | F1 |",
+    "| Chord | Support | Accepted target precision | Verifier recall | F1 |",
     "|---|---:|---:|---:|---:|",
     ...metrics.perChord.map(
       (item) =>
@@ -112,7 +140,7 @@ function renderTopConfusions(metrics: MetricsReport): string {
     .slice(0, 15);
   if (rows.length === 0) return "No confusions.";
   return [
-    "| Expected | Predicted | Count |",
+    "| Expected | Top-1 predicted | Count |",
     "|---|---|---:|",
     ...rows.map((row) => `| ${row.expected} | ${row.predicted} | ${row.count} |`),
   ].join("\n");

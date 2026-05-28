@@ -1,7 +1,8 @@
-import { matchChord } from "../../src/audio/chord-detection";
+import { type ChordVerifierResult, matchChord, verifyChord } from "../../src/audio/chord-detection";
 import { CHORDS_BY_ID } from "../../src/data/chords";
 import { analyzeChordCapture, decodeWavFile } from "./audio";
 import { readCachedResult, writeCachedResult } from "./cache";
+import { SUPPORTED_CHORD_ID_LIST } from "./label-map";
 import type { EvalSample, SampleResult } from "./types";
 
 export async function evaluateSamples(input: {
@@ -49,7 +50,19 @@ async function evaluateSample(
         : audio.samples.length / audio.sampleRate;
     const capture = analyzeChordCapture(audio, sample.startSec, endSec);
     const expected = CHORDS_BY_ID[sample.expectedChordId];
+    if (!expected) throw new Error(`unknown expected chord: ${sample.expectedChordId}`);
+    const capturedChroma = new Float32Array(capture.chroma);
     const match = capture.hasSignal ? matchChord(new Float32Array(capture.chroma), expected) : null;
+    const verifier = capture.hasSignal
+      ? verifyChord(capturedChroma, expected)
+      : uncertainTrial(sample.expectedChordId);
+    const negativeTrials = SUPPORTED_CHORD_ID_LIST.filter((chordId) => chordId !== expected.id).map(
+      (chordId) => {
+        const chord = CHORDS_BY_ID[chordId];
+        if (!chord) throw new Error(`unknown negative chord: ${chordId}`);
+        return capture.hasSignal ? verifyChord(capturedChroma, chord) : uncertainTrial(chordId);
+      },
+    );
     const predictedChordId = match?.chord?.id ?? null;
     const runnerUpChordId = match?.runnerUp?.chord.id ?? null;
     const runnerUpSimilarity = match?.runnerUp?.similarity ?? null;
@@ -68,6 +81,14 @@ async function evaluateSample(
       margin,
       correct: predictedChordId === sample.expectedChordId,
       sameFamily: match?.sameFamily ?? false,
+      verifierStatus: verifier.status,
+      acceptedChordId: verifier.acceptedChordId,
+      bestAlternativeChordId: verifier.bestAlternativeChordId,
+      expectedSimilarity: verifier.expectedSimilarity,
+      alternativeSimilarity: verifier.alternativeSimilarity,
+      verifierMargin: verifier.margin,
+      confidence: verifier.confidence,
+      negativeTrials,
       capture,
       metadata: sample.metadata,
     };
@@ -82,4 +103,17 @@ async function evaluateSample(
       metadata: sample.metadata,
     };
   }
+}
+
+function uncertainTrial(expectedChordId: string): ChordVerifierResult {
+  return {
+    status: "uncertain",
+    expectedChordId,
+    acceptedChordId: null,
+    bestAlternativeChordId: null,
+    expectedSimilarity: 0,
+    alternativeSimilarity: null,
+    margin: 0,
+    confidence: 0,
+  };
 }

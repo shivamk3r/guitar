@@ -1,38 +1,26 @@
 import { SUPPORTED_CHORD_ID_LIST } from "./label-map";
 import type {
+  ChordVerifierTrial,
   EvaluatedSampleResult,
   MetricsReport,
   PerChordMetrics,
   SampleResult,
-  ThresholdConfig,
 } from "./types";
 
-export const BASELINE_THRESHOLD: ThresholdConfig = { similarity: 0, margin: -1 };
-
-export const THRESHOLD_SWEEP: ThresholdConfig[] = [
-  BASELINE_THRESHOLD,
-  { similarity: 0.55, margin: -1 },
-  { similarity: 0.65, margin: 0 },
-  { similarity: 0.75, margin: 0.03 },
-  { similarity: 0.85, margin: 0.06 },
-  { similarity: 0.9, margin: 0.1 },
-];
-
-export function computeMetrics(
-  results: readonly SampleResult[],
-  threshold: ThresholdConfig = BASELINE_THRESHOLD,
-): MetricsReport {
+export function computeMetrics(results: readonly SampleResult[]): MetricsReport {
   const evaluated = results.filter(
     (result): result is EvaluatedSampleResult => result.status === "evaluated",
   );
   const failed = results.length - evaluated.length;
   const perChord = new Map<string, MutableChordMetrics>();
   const confusionMatrix: Record<string, Record<string, number>> = {};
-  let correct = 0;
-  let acceptedCorrect = 0;
-  let falseRejects = 0;
+  let topOneCorrect = 0;
+  let positiveAccepted = 0;
+  let positiveRejected = 0;
+  let positiveUncertain = 0;
+  let negativeTrials = 0;
   let falseAccepts = 0;
-  let unknowns = 0;
+  let wrongAcceptedSamples = 0;
 
   for (const chordId of SUPPORTED_CHORD_ID_LIST) {
     perChord.set(chordId, { chordId, support: 0, predicted: 0, correct: 0 });
@@ -43,37 +31,45 @@ export function computeMetrics(
     const predicted = result.predictedChordId ?? "unknown";
     confusionMatrix[expected] ??= {};
     confusionMatrix[expected][predicted] = (confusionMatrix[expected][predicted] ?? 0) + 1;
+
     const expectedMetrics = ensureChord(perChord, expected);
     expectedMetrics.support++;
-    const accepted = isAccepted(result, threshold);
-    if (!accepted) unknowns++;
-    if (result.correct) correct++;
-    if (accepted && result.predictedChordId) {
-      const predictedMetrics = ensureChord(perChord, result.predictedChordId);
-      predictedMetrics.predicted++;
-      if (result.predictedChordId === expected) {
-        expectedMetrics.correct++;
-        acceptedCorrect++;
-      } else {
-        falseAccepts++;
-      }
+    if (result.correct) topOneCorrect++;
+
+    if (result.verifierStatus === "accepted") {
+      positiveAccepted++;
+      expectedMetrics.correct++;
+      expectedMetrics.predicted++;
+    } else if (result.verifierStatus === "rejected") {
+      positiveRejected++;
+    } else {
+      positiveUncertain++;
     }
-    if (!accepted || result.predictedChordId !== expected) falseRejects++;
+
+    const acceptedNegatives = result.negativeTrials.filter(isAccepted);
+    negativeTrials += result.negativeTrials.length;
+    falseAccepts += acceptedNegatives.length;
+    if (acceptedNegatives.length > 0) wrongAcceptedSamples++;
+    for (const trial of acceptedNegatives) {
+      ensureChord(perChord, trial.expectedChordId).predicted++;
+    }
   }
 
   const evaluatedCount = evaluated.length;
-  const negativeVerifierTrials = evaluatedCount * Math.max(0, SUPPORTED_CHORD_ID_LIST.length - 1);
   return {
-    threshold,
     summary: {
       evaluated: evaluatedCount,
       failed,
-      accuracy: safeDivide(correct, evaluatedCount),
-      verifierRecall: safeDivide(acceptedCorrect, evaluatedCount),
-      falseRejectRate: safeDivide(falseRejects, evaluatedCount),
-      falseAcceptRate: safeDivide(falseAccepts, negativeVerifierTrials),
-      wrongAcceptedRate: safeDivide(falseAccepts, evaluatedCount),
-      unknownRate: safeDivide(unknowns, evaluatedCount),
+      negativeTrials,
+      falseAccepts,
+      wrongAcceptedSamples,
+      accuracy: safeDivide(topOneCorrect, evaluatedCount),
+      verifierRecall: safeDivide(positiveAccepted, evaluatedCount),
+      falseRejectRate: safeDivide(evaluatedCount - positiveAccepted, evaluatedCount),
+      falseAcceptRate: safeDivide(falseAccepts, negativeTrials),
+      wrongAcceptedRate: safeDivide(wrongAcceptedSamples, evaluatedCount),
+      unknownRate: safeDivide(positiveUncertain, evaluatedCount),
+      rejectedRate: safeDivide(positiveRejected, evaluatedCount),
     },
     perChord: [...perChord.values()]
       .filter((item) => item.support > 0 || item.predicted > 0)
@@ -83,16 +79,8 @@ export function computeMetrics(
   };
 }
 
-export function computeThresholdSweep(results: readonly SampleResult[]): MetricsReport[] {
-  return THRESHOLD_SWEEP.map((threshold) => computeMetrics(results, threshold));
-}
-
-function isAccepted(result: EvaluatedSampleResult, threshold: ThresholdConfig): boolean {
-  return (
-    result.predictedChordId != null &&
-    result.similarity >= threshold.similarity &&
-    result.margin >= threshold.margin
-  );
+function isAccepted(trial: ChordVerifierTrial): boolean {
+  return trial.status === "accepted";
 }
 
 interface MutableChordMetrics {

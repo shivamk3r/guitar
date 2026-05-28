@@ -1,6 +1,13 @@
 import { CHORDS, getChord } from "@/data/chords";
 import { describe, expect, it } from "vitest";
-import { classifyStrings, expectedRingsMask, matchChord } from "./chord-detection";
+import {
+  aggregateChromaFrames,
+  classifyStrings,
+  expectedRingsMask,
+  matchChord,
+  verifierThresholdFor,
+  verifyChord,
+} from "./chord-detection";
 
 describe("matchChord", () => {
   it("matches a C chord's own chroma template to itself", () => {
@@ -21,6 +28,56 @@ describe("matchChord", () => {
     const result = matchChord(g.chroma);
     expect(result.runnerUp).not.toBeNull();
     expect(result.runnerUp!.chord.id).not.toBe("G");
+  });
+});
+
+describe("verifyChord", () => {
+  it("accepts the expected chord when its template is clear", () => {
+    const c = getChord("C")!;
+    const result = verifyChord(c.chroma, c);
+    expect(result.status).toBe("accepted");
+    expect(result.acceptedChordId).toBe("C");
+    expect(result.expectedSimilarity).toBeGreaterThan(0.9);
+  });
+
+  it("rejects the expected chord when a confident confuser is better", () => {
+    const c = getChord("C")!;
+    const g = getChord("G")!;
+    const result = verifyChord(g.chroma, c);
+    expect(result.status).toBe("rejected");
+    expect(result.acceptedChordId).toBeNull();
+    expect(result.bestAlternativeChordId).toBe("G");
+  });
+
+  it("can return uncertain instead of accepting weak evidence", () => {
+    const c = getChord("C")!;
+    const weak = new Float32Array(12);
+    const result = verifyChord(weak, c);
+    expect(result.status).toBe("uncertain");
+    expect(result.acceptedChordId).toBeNull();
+  });
+
+  it("exposes per-chord thresholds", () => {
+    expect(verifierThresholdFor("C").acceptSimilarity).toBeGreaterThan(0);
+  });
+});
+
+describe("aggregateChromaFrames", () => {
+  it("skips transient frames and RMS-weights the aggregate", () => {
+    const transient = new Float32Array(12);
+    transient[1] = 1;
+    const stable = new Float32Array(12);
+    stable[0] = 1;
+
+    const aggregate = aggregateChromaFrames([
+      { chroma: transient, rms: 0.8, t: 0 },
+      { chroma: stable, rms: 0.3, t: 0.09 },
+      { chroma: stable, rms: 0.3, t: 0.1 },
+    ]);
+
+    expect(aggregate.hasSignal).toBe(true);
+    expect(aggregate.avgChroma[0]).toBeGreaterThan(aggregate.avgChroma[1] ?? 0);
+    expect(aggregate.framesUsed).toBe(2);
   });
 });
 

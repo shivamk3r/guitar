@@ -92,27 +92,29 @@ The product closes the loop between "I played something" and "what should I do n
 
 ### 5.1 Current Chord Detection Eval Baseline
 
-The current chord detector is measured with the manual offline eval harness in `apps/frontend/evals/chord-detection`. The latest full eval run was generated 2026-05-29 IST (`2026-05-28T21:34:56.921Z`) against algorithm fingerprint `55679441ce783a38`.
+The current chord detector is measured with the manual offline eval harness in `apps/frontend/evals/chord-detection`. The browser detector is the real-time production path; the Python implementation is an eval-only research bench that reads the same prepared datasets and report schema.
 
-| Scope | Evaluated | Accuracy | Verifier recall | Wrong accepted |
-| --- | ---: | ---: | ---: | ---: |
-| Overall | 955 | 22.8% | 22.8% | 77.2% |
-| Isolated Guitar Chords | 54 | 16.7% | 16.7% | 83.3% |
-| GuitarSet | 901 | 23.2% | 23.2% | 76.8% |
+Latest full target-aware evals were generated 2026-05-29 IST:
 
-This is below **NFR-2** and confirms the current open-ended chroma/template matcher is not reliable enough for learner-trustworthy chord correctness. Future detection work should be evaluated against this harness and should prefer target-aware verification metrics, false accepts, false rejects, and per-chord recall over only top-1 recognizer accuracy.
+| Implementation | Timestamp | Fingerprint | Evaluated | Top-1 accuracy | Verifier recall | False accept trials | Wrong-accept samples | Uncertain |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Frontend | `2026-05-28T23:08:22.140Z` | `b2bc7dcc3144d973` | 955 | 14.3% | 10.1% | 0.7% | 11.8% | 69.2% |
+| Python | `2026-05-28T23:13:33.957028Z` | `8f17959faef3430b` | 955 | 14.2% | 9.7% | 0.7% | 11.0% | 69.4% |
+
+This is still below the long-term **NFR-2** accuracy target. The current v1 verifier intentionally trades recall for fewer confident wrong accepts: `accepted` is scored as correct for the target chord, `rejected` is scored as wrong using the best alternative, and `uncertain` avoids awarding or confidently penalizing a chord identity when evidence is ambiguous. Future detection work should continue to optimize target-aware verifier recall under a low false-accept budget rather than only improving open-ended top-1 recognizer accuracy.
 
 ## 6. Audio and Analysis Requirements
 
 - **AR-1** Immediate DSP uses Web Audio and AudioWorklet in the frontend.
 - **AR-2** Tuner pitch detection uses an autocorrelation/YIN-style algorithm.
-- **AR-3** Chord detection uses chroma/template matching and per-string classification.
+- **AR-3** Chord detection uses browser-side harmonic chroma/template analysis, target-aware verification, and per-string classification.
 - **AR-4** Rhythm drills use onset detection with timestamps aligned to the audio clock.
 - **AR-5** Recording uses the already-granted microphone stream and does not replace the real-time feedback path.
 - **AR-6** Backend analysis is asynchronous and may use classical DSP, ML, or hybrid models in later milestones.
 - **AR-7** Browser audio input selection uses the selected `audioinput` device for realtime DSP and consented recording, falls back to browser default if the preferred device is unavailable, and disables switching during active scored or recorded sessions.
 - **AR-8** Microphone labels and device identifiers remain local browser UI/preference state and are not included in recording session metadata by default.
 - **AR-9** Browser microphone capture requests speech processing disabled (`echoCancellation`, `noiseSuppression`, and `autoGainControl`) so guitar recordings keep harmonics, sustain, and room detail. Consented recordings are saved as raw PCM WAV before app analysis filters; compressed browser recording is only a fallback when raw capture is unavailable.
+- **AR-10** Python chord detection remains an eval-only research bench in this milestone and is not wired into backend recording analysis or learner-facing feedback.
 
 ## 7. Data Model
 

@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { type ChromaFrame, aggregateChromaFrames } from "../../src/audio/chord-detection";
 import { ChromaExtractor } from "../../src/audio/dsp/chroma";
 import { FFT, applyHann } from "../../src/audio/dsp/fft";
 import { OnsetDetector } from "../../src/audio/dsp/onset";
@@ -92,7 +93,7 @@ export function analyzeChordCapture(
     Math.floor(scanStartSec * audio.sampleRate),
   );
   const scanEndSample = Math.min(audio.samples.length, Math.ceil(segmentEnd * audio.sampleRate));
-  const frames: Array<{ t: number; chroma: Float32Array }> = [];
+  const frames: ChromaFrame[] = [];
   let onsetSec: number | null = null;
 
   for (
@@ -110,9 +111,10 @@ export function analyzeChordCapture(
     if (onsetSec == null && t >= segmentStart && t <= segmentEnd && onsetResult.onset) {
       onsetSec = t;
     }
-    if (windowRms(audio.samples, windowStart, windowEnd) > CAPTURE_CONFIG.rmsThreshold) {
+    const rms = windowRms(audio.samples, windowStart, windowEnd);
+    if (rms > CAPTURE_CONFIG.rmsThreshold) {
       chromaExtractor.compute(mag, chroma);
-      frames.push({ t, chroma: new Float32Array(chroma) });
+      frames.push({ t, rms, chroma: new Float32Array(chroma) });
     }
   }
 
@@ -121,41 +123,29 @@ export function analyzeChordCapture(
     onsetSec ?? Math.max(segmentStart, segmentStart + (segmentEnd - segmentStart) / 2);
   const captureEndSec = Math.min(segmentEnd, captureStartSec + CAPTURE_CONFIG.captureMs / 1000);
   let captureFrames = frames.filter(
-    (frame) => frame.t >= captureStartSec && frame.t <= captureEndSec,
+    (frame) => frame.t != null && frame.t >= captureStartSec && frame.t <= captureEndSec,
   );
   let captureStrategy: CaptureResult["captureStrategy"] = strategy;
   if (captureFrames.length === 0) {
-    captureFrames = frames.filter((frame) => frame.t >= segmentStart && frame.t <= segmentEnd);
+    captureFrames = frames.filter(
+      (frame) => frame.t != null && frame.t >= segmentStart && frame.t <= segmentEnd,
+    );
     captureStrategy = "fallback";
   }
-  const { avgChroma, hasSignal } = averageChroma(captureFrames.map((frame) => frame.chroma));
+  const aggregate = aggregateChromaFrames(captureFrames, {
+    transientSkipMs: CAPTURE_CONFIG.transientSkipMs,
+    trimRatio: CAPTURE_CONFIG.trimRatio,
+  });
   return {
-    chroma: [...avgChroma],
-    hasSignal,
+    chroma: [...aggregate.avgChroma],
+    hasSignal: aggregate.hasSignal,
     captureStartSec,
     captureEndSec,
     captureStrategy,
     onsetSec,
     chromaFrames: captureFrames.length,
+    chromaFramesUsed: aggregate.framesUsed,
   };
-}
-
-function averageChroma(frames: readonly Float32Array[]): {
-  avgChroma: Float32Array;
-  hasSignal: boolean;
-} {
-  const avgChroma = new Float32Array(12);
-  if (frames.length === 0) return { avgChroma, hasSignal: false };
-  for (const frame of frames) {
-    for (let i = 0; i < 12; i++) avgChroma[i] = (avgChroma[i] ?? 0) + (frame[i] ?? 0);
-  }
-  for (let i = 0; i < 12; i++) avgChroma[i] = (avgChroma[i] ?? 0) / frames.length;
-  let norm = 0;
-  for (let i = 0; i < 12; i++) norm += (avgChroma[i] ?? 0) * (avgChroma[i] ?? 0);
-  norm = Math.sqrt(norm);
-  if (norm <= 1e-8) return { avgChroma, hasSignal: false };
-  for (let i = 0; i < 12; i++) avgChroma[i] = (avgChroma[i] ?? 0) / norm;
-  return { avgChroma, hasSignal: true };
 }
 
 function windowRms(samples: Float32Array, start: number, end: number): number {

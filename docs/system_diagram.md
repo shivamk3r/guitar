@@ -15,6 +15,12 @@ flowchart LR
     Models["SQLAlchemy domain models"]
   end
 
+  subgraph LocalEval["Local offline evals"]
+    EvalCache[(".eval-cache chord datasets/results/reports")]
+    FrontendEval["Frontend TypeScript eval CLI"]
+    PyEval["Python eval-only research bench"]
+  end
+
   subgraph LocalInfra["Local Docker Compose infrastructure"]
     Postgres[("Postgres")]
     MinIO[("MinIO S3-compatible audio bucket")]
@@ -38,6 +44,9 @@ flowchart LR
   Worker -->|"read job and metadata"| Postgres
   Worker -->|"future: read audio"| MinIO
   Worker -->|"write analysis result"| Postgres
+  FrontendEval -.->|"reuses detector source"| Worklet
+  FrontendEval --> EvalCache
+  PyEval --> EvalCache
 
   subgraph AWS["Future AWS mapping"]
     RDS["RDS PostgreSQL"]

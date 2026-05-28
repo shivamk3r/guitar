@@ -5,6 +5,7 @@ import { CAPTURE_CONFIG, EVAL_VERSION, type EvalSample } from "./types";
 
 const DETECTOR_SOURCE_FILES = [
   "src/audio/chord-detection.ts",
+  "src/audio/chord-verifier-thresholds.json",
   "src/audio/dsp/chroma.ts",
   "src/audio/dsp/fft.ts",
   "src/audio/dsp/onset.ts",

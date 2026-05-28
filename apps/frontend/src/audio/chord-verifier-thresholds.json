@@ -1,0 +1,112 @@
+{
+  "default": {
+    "acceptSimilarity": 0.9,
+    "acceptMargin": 0.2,
+    "rejectAlternativeSimilarity": 0.72,
+    "rejectMargin": 0.05
+  },
+  "perChord": {
+    "A": {
+      "acceptSimilarity": 0.6,
+      "acceptMargin": 0,
+      "rejectAlternativeSimilarity": 0.72,
+      "rejectMargin": 0.05
+    },
+    "A5": {
+      "acceptSimilarity": 0.9,
+      "acceptMargin": 0.03,
+      "rejectAlternativeSimilarity": 0.72,
+      "rejectMargin": 0.05
+    },
+    "A7": {
+      "acceptSimilarity": 0.58,
+      "acceptMargin": 0.08,
+      "rejectAlternativeSimilarity": 0.72,
+      "rejectMargin": 0.05
+    },
+    "Am": {
+      "acceptSimilarity": 0.8,
+      "acceptMargin": 0,
+      "rejectAlternativeSimilarity": 0.72,
+      "rejectMargin": 0.05
+    },
+    "B7": {
+      "acceptSimilarity": 0.9,
+      "acceptMargin": -0.06,
+      "rejectAlternativeSimilarity": 0.72,
+      "rejectMargin": 0.05
+    },
+    "C": {
+      "acceptSimilarity": 0.6,
+      "acceptMargin": 0.09,
+      "rejectAlternativeSimilarity": 0.72,
+      "rejectMargin": 0.05
+    },
+    "D": {
+      "acceptSimilarity": 0.66,
+      "acceptMargin": -0.01,
+      "rejectAlternativeSimilarity": 0.72,
+      "rejectMargin": 0.05
+    },
+    "D5": {
+      "acceptSimilarity": 0.9,
+      "acceptMargin": -0.06,
+      "rejectAlternativeSimilarity": 0.72,
+      "rejectMargin": 0.05
+    },
+    "D7": {
+      "acceptSimilarity": 0.72,
+      "acceptMargin": 0.08,
+      "rejectAlternativeSimilarity": 0.72,
+      "rejectMargin": 0.05
+    },
+    "Dm": {
+      "acceptSimilarity": 0.72,
+      "acceptMargin": -0.04,
+      "rejectAlternativeSimilarity": 0.72,
+      "rejectMargin": 0.05
+    },
+    "E": {
+      "acceptSimilarity": 0.74,
+      "acceptMargin": -0.03,
+      "rejectAlternativeSimilarity": 0.72,
+      "rejectMargin": 0.05
+    },
+    "E5": {
+      "acceptSimilarity": 0.9,
+      "acceptMargin": -0.06,
+      "rejectAlternativeSimilarity": 0.72,
+      "rejectMargin": 0.05
+    },
+    "E7": {
+      "acceptSimilarity": 0.72,
+      "acceptMargin": 0.04,
+      "rejectAlternativeSimilarity": 0.72,
+      "rejectMargin": 0.05
+    },
+    "Em": {
+      "acceptSimilarity": 0.9,
+      "acceptMargin": -0.06,
+      "rejectAlternativeSimilarity": 0.72,
+      "rejectMargin": 0.05
+    },
+    "F": {
+      "acceptSimilarity": 0.66,
+      "acceptMargin": -0.06,
+      "rejectAlternativeSimilarity": 0.72,
+      "rejectMargin": 0.05
+    },
+    "G": {
+      "acceptSimilarity": 0.66,
+      "acceptMargin": 0.01,
+      "rejectAlternativeSimilarity": 0.72,
+      "rejectMargin": 0.05
+    },
+    "G7": {
+      "acceptSimilarity": 0.66,
+      "acceptMargin": 0.08,
+      "rejectAlternativeSimilarity": 0.72,
+      "rejectMargin": 0.05
+    }
+  }
+}

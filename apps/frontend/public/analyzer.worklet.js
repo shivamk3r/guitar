@@ -159,23 +159,37 @@ class ChromaExtractor {
     const binCount = fftSize / 2 + 1;
     this.binCount = binCount;
     this.weights = new Float32Array(binCount * 12);
+    this.whitened = new Float32Array(binCount);
     const sigma = 0.5;
+    const harmonics = 6;
+    const harmonicRolloff = 2.4;
     for (let i = 0; i < binCount; i++) {
       const hz = (i * sampleRate) / fftSize;
       if (hz < minHz || hz > maxHz) continue;
       const midiFloat = 12 * Math.log2(hz / 440) + 69;
-      const pcFloat = ((midiFloat % 12) + 12) % 12;
-      for (let pc = 0; pc < 12; pc++) {
-        let delta = pcFloat - pc;
-        delta = ((((delta + 6) % 12) + 12) % 12) - 6;
-        this.weights[i * 12 + pc] = Math.exp(-(delta * delta) / (2 * sigma * sigma));
+      let harmonicWeightTotal = 0;
+      for (let harmonic = 1; harmonic <= harmonics; harmonic++) {
+        const fundamentalMidi = midiFloat - 12 * Math.log2(harmonic);
+        const pcFloat = ((fundamentalMidi % 12) + 12) % 12;
+        const harmonicWeight = harmonic === 1 ? 4 : harmonic ** -harmonicRolloff;
+        harmonicWeightTotal += harmonicWeight;
+        for (let pc = 0; pc < 12; pc++) {
+          let delta = pcFloat - pc;
+          delta = ((((delta + 6) % 12) + 12) % 12) - 6;
+          this.weights[i * 12 + pc] +=
+            harmonicWeight * Math.exp(-(delta * delta) / (2 * sigma * sigma));
+        }
+      }
+      if (harmonicWeightTotal > 0) {
+        for (let pc = 0; pc < 12; pc++) this.weights[i * 12 + pc] /= harmonicWeightTotal;
       }
     }
   }
   compute(mag, out) {
     out.fill(0);
+    const spectrum = this.prepareSpectrum(mag);
     for (let i = 0; i < this.binCount; i++) {
-      const m = mag[i];
+      const m = spectrum[i];
       if (m === 0) continue;
       for (let pc = 0; pc < 12; pc++) {
         out[pc] += m * this.weights[i * 12 + pc];
@@ -185,6 +199,28 @@ class ChromaExtractor {
     for (let p = 0; p < 12; p++) norm += out[p] * out[p];
     norm = Math.sqrt(norm);
     if (norm > 1e-6) for (let p = 0; p < 12; p++) out[p] /= norm;
+  }
+  prepareSpectrum(mag) {
+    this.whitened.fill(0);
+    const whiteningBins = 12;
+    for (let i = 1; i < this.binCount; i++) {
+      const m = mag[i] ?? 0;
+      if (m <= 0) continue;
+      const start = Math.max(1, i - whiteningBins);
+      const end = Math.min(this.binCount - 1, i + whiteningBins);
+      let localSum = 0;
+      let localCount = 0;
+      for (let j = start; j <= end; j++) {
+        const value = mag[j] ?? 0;
+        if (value <= 0) continue;
+        localSum += value;
+        localCount++;
+      }
+      const localMean = localCount > 0 ? localSum / localCount : 0;
+      this.whitened[i] =
+        localMean > 0 ? Math.max(0, Math.log1p(m / localMean) - Math.LN2) : Math.log1p(m);
+    }
+    return this.whitened;
   }
 }
 

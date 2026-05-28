@@ -4,7 +4,7 @@ import { loadDataset, prepareDatasets } from "./datasets";
 import { evaluateSamples } from "./evaluator";
 import { ensureDir } from "./fs-utils";
 import { algorithmFingerprint } from "./hash";
-import { computeMetrics, computeThresholdSweep } from "./metrics";
+import { computeMetrics } from "./metrics";
 import { writeReports } from "./report";
 import type { DatasetId, EvalCliOptions, EvalReport, SampleResult } from "./types";
 import { EVAL_VERSION } from "./types";
@@ -74,9 +74,9 @@ function buildReport(input: {
       hits: input.results.filter((result) => result.cacheStatus === "hit").length,
       misses: input.results.filter((result) => result.cacheStatus === "miss").length,
     },
+    implementation: "frontend",
     summary: computeMetrics(input.results),
     byDataset,
-    thresholdSweep: computeThresholdSweep(input.results),
     samples: input.results,
   };
 }
@@ -163,10 +163,11 @@ function printSummary(report: EvalReport, markdownPath: string): void {
   console.log("");
   console.log("Chord detection eval complete");
   console.log(`Evaluated: ${summary.evaluated}`);
-  console.log(`Accuracy: ${pct(summary.accuracy)}`);
+  console.log(`Top-1 accuracy: ${pct(summary.accuracy)}`);
   console.log(`Verifier recall: ${pct(summary.verifierRecall)}`);
-  console.log(`Wrong accepted: ${pct(summary.wrongAcceptedRate)}`);
-  console.log(`Unknown: ${pct(summary.unknownRate)}`);
+  console.log(`False accept trials: ${pct(summary.falseAcceptRate)}`);
+  console.log(`Wrong-accept samples: ${pct(summary.wrongAcceptedRate)}`);
+  console.log(`Uncertain: ${pct(summary.unknownRate)}`);
   console.log(`Cache: ${report.cache.hits} hits, ${report.cache.misses} misses`);
   console.log(`Report: ${markdownPath}`);
 }

@@ -1,4 +1,6 @@
-export const EVAL_VERSION = "chord-detection-eval-v1";
+import type { ChordVerifierStatus } from "../../src/audio/chord-detection";
+
+export const EVAL_VERSION = "chord-detection-eval-v2-target-aware";
 
 export const CAPTURE_CONFIG = {
   fftSize: 2048,
@@ -8,6 +10,8 @@ export const CAPTURE_CONFIG = {
   maxHz: 2000,
   rmsThreshold: 0.01,
   onsetLookbackMs: 500,
+  transientSkipMs: 80,
+  trimRatio: 0.15,
 } as const;
 
 export type DatasetId = "isolated-guitar-chords" | "guitarset";
@@ -54,6 +58,18 @@ export interface CaptureResult {
   captureStrategy: "onset" | "midpoint" | "fallback";
   onsetSec: number | null;
   chromaFrames: number;
+  chromaFramesUsed: number;
+}
+
+export interface ChordVerifierTrial {
+  status: ChordVerifierStatus;
+  expectedChordId: string;
+  acceptedChordId: string | null;
+  bestAlternativeChordId: string | null;
+  expectedSimilarity: number;
+  alternativeSimilarity: number | null;
+  margin: number;
+  confidence: number;
 }
 
 export interface EvaluatedSampleResult {
@@ -69,6 +85,14 @@ export interface EvaluatedSampleResult {
   margin: number;
   correct: boolean;
   sameFamily: boolean;
+  verifierStatus: ChordVerifierStatus;
+  acceptedChordId: string | null;
+  bestAlternativeChordId: string | null;
+  expectedSimilarity: number;
+  alternativeSimilarity: number | null;
+  verifierMargin: number;
+  confidence: number;
+  negativeTrials: ChordVerifierTrial[];
   capture: CaptureResult;
   metadata: EvalSample["metadata"];
 }
@@ -85,11 +109,6 @@ export interface FailedSampleResult {
 
 export type SampleResult = EvaluatedSampleResult | FailedSampleResult;
 
-export interface ThresholdConfig {
-  similarity: number;
-  margin: number;
-}
-
 export interface PerChordMetrics {
   chordId: string;
   support: number;
@@ -103,22 +122,26 @@ export interface PerChordMetrics {
 export interface MetricsSummary {
   evaluated: number;
   failed: number;
+  negativeTrials: number;
+  falseAccepts: number;
+  wrongAcceptedSamples: number;
   accuracy: number;
   verifierRecall: number;
   falseRejectRate: number;
   falseAcceptRate: number;
   wrongAcceptedRate: number;
   unknownRate: number;
+  rejectedRate: number;
 }
 
 export interface MetricsReport {
-  threshold: ThresholdConfig;
   summary: MetricsSummary;
   perChord: PerChordMetrics[];
   confusionMatrix: Record<string, Record<string, number>>;
 }
 
 export interface EvalReport {
+  implementation: "frontend" | "python";
   generatedAtIso: string;
   evalVersion: string;
   algorithmFingerprint: string;
@@ -134,6 +157,5 @@ export interface EvalReport {
   };
   summary: MetricsReport;
   byDataset: Record<DatasetId, MetricsReport | null>;
-  thresholdSweep: MetricsReport[];
   samples: SampleResult[];
 }

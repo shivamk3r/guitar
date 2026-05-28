@@ -27,7 +27,7 @@ guitar/
 ## 3. Service Boundaries
 
 - **Frontend (`apps/frontend`)**
-  - Owns React routes, UI, Web Audio/AudioWorklet DSP, immediate scoring, browser-only Learn lessons, and raw browser recording orchestration.
+  - Owns React routes, UI, Web Audio/AudioWorklet DSP, target-aware chord verification, immediate scoring, browser-only Learn lessons, and raw browser recording orchestration.
   - Stores local settings, preferred microphone input, and anonymous learner identifiers in IndexedDB. Microphone labels and device identifiers stay browser-local by default.
   - Requests browser speech processing off for instrument capture and uploads recordings to the API only after explicit consent.
 
@@ -40,6 +40,11 @@ guitar/
 - **Worker (`apps/backend/app/worker.py`)**
   - Polls SQS, loads job/recording metadata, runs asynchronous analysis, and writes results.
   - The current worker writes placeholder metrics; later milestones add real extraction.
+
+- **Python chord eval bench (`apps/backend/app/evals/chord_detection`)**
+  - Reads the same prepared `.eval-cache/chord-detection` datasets as the frontend eval CLI.
+  - Mirrors the classical DSP verifier for research and comparison only.
+  - Is not part of the realtime browser feedback path or the backend worker path in this milestone.
 
 - **Infrastructure**
   - Postgres persists relational state.
@@ -106,7 +111,7 @@ Persistent Docker volumes keep Postgres, MinIO, and LocalStack state across rest
 
 - **Frontend unit tests:** Vitest for DSP, scoring, stores, glossary data, and components.
 - **Frontend e2e:** Playwright with fake media devices.
-- **Chord detection evals:** Manual TypeScript eval harness in `apps/frontend/evals/chord-detection` against cached public labelled guitar datasets. Run with `pnpm eval:chords`; outputs live under `.eval-cache/chord-detection/reports/`.
+- **Chord detection evals:** Manual target-aware eval harnesses against cached public labelled guitar datasets. Run the browser production path with `pnpm eval:chords` or `pnpm eval:chords:frontend`, run the Python research bench with `pnpm eval:chords:python`, and generate side-by-side reports with `pnpm eval:chords:compare`. Outputs live under `.eval-cache/chord-detection/reports/{frontend,python,comparison}/`.
 - **Backend unit/API tests:** Pytest with SQLite and fake storage/queue dependencies.
 - **Compose smoke:** `docker compose config`, `docker compose up --build`, `/health`, and a recording-upload path.
 

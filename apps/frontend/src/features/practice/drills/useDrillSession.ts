@@ -1,7 +1,13 @@
-import { classifyStrings, expectedRingsMask, matchChord } from "@/audio/chord-detection";
+import {
+  type ChromaFrame,
+  aggregateChromaFrames,
+  classifyStrings,
+  expectedRingsMask,
+  verifyChord,
+} from "@/audio/chord-detection";
 import { type ActiveRecordedSession, startRecordedSession } from "@/audio/sessionRecording";
 import { ensureEngineStarted, getEngine } from "@/audio/useAudioEngine";
-import type { ChordDef } from "@/data/chords";
+import { type ChordDef, getChord } from "@/data/chords";
 import { useProgress } from "@/storage/progress-store";
 import { useSettings } from "@/storage/settings-store";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -56,7 +62,7 @@ export function useDrillSession(config: DrillConfig): UseDrillSession {
   const [error, setError] = useState<string | null>(null);
   const metronomeRef = useRef<Metronome | null>(null);
   const recordingRef = useRef<ActiveRecordedSession | null>(null);
-  const captureRef = useRef<{ start: number; frames: Float32Array[] } | null>(null);
+  const captureRef = useRef<{ start: number; frames: ChromaFrame[] } | null>(null);
   const chordIndexRef = useRef(0);
   const chordsRef = useRef(config.chords);
   const beatsPerChangeRef = useRef(config.beatsPerChange);
@@ -72,12 +78,18 @@ export function useDrillSession(config: DrillConfig): UseDrillSession {
     (deltaMs: number, avgChroma: Float32Array) => {
       const chords = chordsRef.current;
       const expected = chords[chordIndexRef.current % chords.length]!;
-      const match = matchChord(avgChroma, expected);
+      const verification = verifyChord(avgChroma, expected);
+      const detected =
+        verification.status === "accepted"
+          ? expected
+          : verification.status === "rejected"
+            ? (getChord(verification.bestAlternativeChordId ?? "") ?? null)
+            : null;
       const stringStates = classifyStrings(expected, avgChroma);
       const scored = scoreEvent({
-        detectedChordId: match.chord?.id,
+        detectedChordId: detected?.id,
         expectedChordId: expected.id,
-        sameFamily: match.sameFamily,
+        sameFamily: detected != null && detected.root === expected.root,
         strings: stringStates,
         expectedRings: expectedRingsMask(expected),
         timingApplies: true,
@@ -88,18 +100,18 @@ export function useDrillSession(config: DrillConfig): UseDrillSession {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         atIso: new Date().toISOString(),
         expectedChordId: expected.id,
-        detectedChordId: match.chord?.id ?? null,
+        detectedChordId: detected?.id ?? null,
         score: scored,
         bpm,
       };
       recordEvent(event);
-      setLastEvent({ expected, detected: match.chord, scored, stringStates });
+      setLastEvent({ expected, detected, scored, stringStates });
       attemptsRef.current = [
         ...attemptsRef.current,
         {
           atIso: event.atIso,
           expectedChordId: expected.id,
-          detectedChordId: match.chord?.id ?? null,
+          detectedChordId: detected?.id ?? null,
           score: scored,
           bpm,
           timingDeltaMs: deltaMs,
@@ -205,19 +217,14 @@ export function useDrillSession(config: DrillConfig): UseDrillSession {
         const capture = captureRef.current;
         captureRef.current = null;
         if (!capture || capture.frames.length === 0) return;
-        const avg = new Float32Array(12);
-        for (const f of capture.frames)
-          for (let i = 0; i < 12; i++) avg[i] = (avg[i] ?? 0) + (f[i] ?? 0);
-        for (let i = 0; i < 12; i++) avg[i] = (avg[i] ?? 0) / capture.frames.length;
-        let n = 0;
-        for (let i = 0; i < 12; i++) n += (avg[i] ?? 0) * (avg[i] ?? 0);
-        n = Math.sqrt(n);
-        if (n > 1e-8) for (let i = 0; i < 12; i++) avg[i] = (avg[i] ?? 0) / n;
-        emitScore(beatInfo.deltaMs, avg);
+        const aggregate = aggregateChromaFrames(capture.frames);
+        if (!aggregate.hasSignal) return;
+        emitScore(beatInfo.deltaMs, aggregate.avgChroma);
       }, CAPTURE_MS);
     });
     const unsubChroma = engine.on("chroma", (e) => {
-      if (captureRef.current) captureRef.current.frames.push(e.chroma);
+      if (captureRef.current)
+        captureRef.current.frames.push({ chroma: e.chroma, rms: e.rms, t: e.t });
     });
     return () => {
       unsubOnset();

@@ -1,7 +1,13 @@
-import { classifyStrings, expectedRingsMask, matchChord } from "@/audio/chord-detection";
+import {
+  type ChromaFrame,
+  aggregateChromaFrames,
+  classifyStrings,
+  expectedRingsMask,
+  verifyChord,
+} from "@/audio/chord-detection";
 import { type ActiveRecordedSession, startRecordedSession } from "@/audio/sessionRecording";
 import { ensureEngineStarted, getEngine } from "@/audio/useAudioEngine";
-import type { ChordDef } from "@/data/chords";
+import { type ChordDef, getChord } from "@/data/chords";
 import type { TimedPracticeCountInBeats } from "@/storage/preferences";
 import { useProgress } from "@/storage/progress-store";
 import { useSettings } from "@/storage/settings-store";
@@ -57,7 +63,7 @@ interface PendingCapture {
   expected: ActiveExpected;
   deltaMs: number;
   detectedAtBeat: number;
-  frames: Float32Array[];
+  frames: ChromaFrame[];
 }
 
 export function useTimedChordPracticeSession(
@@ -223,13 +229,19 @@ export function useTimedChordPracticeSession(
       const capture = pendingCapturesRef.current.get(expectedIndex);
       pendingCapturesRef.current.delete(expectedIndex);
       if (!capture) return;
-      const { avgChroma, hasSignal } = averageChroma(capture.frames);
-      const match = hasSignal ? matchChord(avgChroma, capture.expected.chord) : null;
+      const { avgChroma, hasSignal } = aggregateChromaFrames(capture.frames);
+      const verification = hasSignal ? verifyChord(avgChroma, capture.expected.chord) : null;
+      const detectedChord =
+        verification?.status === "accepted"
+          ? capture.expected.chord
+          : verification?.status === "rejected"
+            ? (getChord(verification.bestAlternativeChordId ?? "") ?? null)
+            : null;
       const stringStates = classifyStrings(capture.expected.chord, avgChroma);
       const scored = scoreEvent({
-        detectedChordId: match?.chord?.id,
+        detectedChordId: detectedChord?.id,
         expectedChordId: capture.expected.chordId,
-        sameFamily: match?.sameFamily ?? false,
+        sameFamily: detectedChord != null && detectedChord.root === capture.expected.chord.root,
         strings: stringStates,
         expectedRings: expectedRingsMask(capture.expected.chord),
         timingApplies: true,
@@ -243,7 +255,7 @@ export function useTimedChordPracticeSession(
         chordId: capture.expected.chordId,
         previousChordId: capture.expected.previousChordId,
         expectedBeat: capture.expected.beat,
-        detectedChordId: match?.chord?.id ?? null,
+        detectedChordId: detectedChord?.id ?? null,
         detectedAtBeat: capture.detectedAtBeat,
         timingDeltaMs: capture.deltaMs,
         status: "hit",
@@ -445,7 +457,7 @@ export function useTimedChordPracticeSession(
     });
     const unsubChroma = engine.on("chroma", (event) => {
       for (const capture of pendingCapturesRef.current.values()) {
-        capture.frames.push(event.chroma);
+        capture.frames.push({ chroma: event.chroma, rms: event.rms, t: event.t });
       }
     });
     return () => {
@@ -537,22 +549,4 @@ function nearestExpected(
     }
   }
   return nearest;
-}
-
-function averageChroma(frames: readonly Float32Array[]): {
-  avgChroma: Float32Array;
-  hasSignal: boolean;
-} {
-  const avgChroma = new Float32Array(12);
-  if (frames.length === 0) return { avgChroma, hasSignal: false };
-  for (const frame of frames) {
-    for (let i = 0; i < 12; i++) avgChroma[i] = (avgChroma[i] ?? 0) + (frame[i] ?? 0);
-  }
-  for (let i = 0; i < 12; i++) avgChroma[i] = (avgChroma[i] ?? 0) / frames.length;
-  let norm = 0;
-  for (let i = 0; i < 12; i++) norm += (avgChroma[i] ?? 0) * (avgChroma[i] ?? 0);
-  norm = Math.sqrt(norm);
-  if (norm <= 1e-8) return { avgChroma, hasSignal: false };
-  for (let i = 0; i < 12; i++) avgChroma[i] = (avgChroma[i] ?? 0) / norm;
-  return { avgChroma, hasSignal: true };
 }

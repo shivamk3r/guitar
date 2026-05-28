@@ -19,7 +19,7 @@ If implementation and docs disagree, update the docs in the same change.
 
 - Frontend: Vite, React 18, TypeScript strict, Tailwind, Zustand, IndexedDB, Web Audio, AudioWorklet.
 - Backend: FastAPI, SQLAlchemy, Postgres, MinIO, LocalStack SQS, Python worker.
-- Tests/evals: Vitest, Playwright, Pytest, manual chord detection evals.
+- Tests/evals: Vitest, Playwright, Pytest, manual chord detection evals for frontend and Python research bench.
 - Tooling: pnpm workspace, Biome, Docker Compose.
 
 ## Layout
@@ -43,6 +43,9 @@ pnpm test
 pnpm build
 pnpm test:e2e
 pnpm eval:chords
+pnpm eval:chords:frontend
+pnpm eval:chords:python
+pnpm eval:chords:compare
 pnpm eval:chords:prepare
 ```
 
