@@ -7,4 +7,6 @@ Design and specification for the Guitar Coach platform. Read in order:
 3. [architecture.md](architecture.md) — how the code is organized, service boundaries, audio pipeline, and local runtime.
 4. [system_diagram.md](system_diagram.md) — Mermaid diagram for browser, API, storage, queue, worker, and future AWS mapping.
 
+Operational docs for the chord detection eval harness live in [apps/frontend/evals/chord-detection/README.md](../apps/frontend/evals/chord-detection/README.md).
+
 Future docs live here too (ADRs, runbooks, user-facing guides). The repo root README is the short external pitch; this folder is the source of truth for design.

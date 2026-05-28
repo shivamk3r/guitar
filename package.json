@@ -21,6 +21,8 @@
     "test:frontend": "pnpm --filter @guitar/frontend test",
     "test:backend": "cd apps/backend && python3 -m pytest",
     "test:e2e": "pnpm --filter @guitar/frontend test:e2e",
+    "eval:chords": "pnpm --filter @guitar/frontend eval:chords",
+    "eval:chords:prepare": "pnpm --filter @guitar/frontend eval:chords:prepare",
     "lint": "pnpm lint:frontend && pnpm lint:backend",
     "lint:frontend": "pnpm --filter @guitar/frontend lint",
     "lint:backend": "cd apps/backend && python3 -m compileall app tests",

@@ -17,6 +17,7 @@
 | Worker | Python worker sharing backend domain modules |
 | Local runtime | Docker Compose |
 | Frontend tests | Vitest + Playwright |
+| Audio evals | TypeScript CLI with cached public datasets |
 | Backend tests | Pytest |
 | Frontend lint/format | Biome |
 | Package manager | pnpm workspace |
@@ -33,6 +34,8 @@
 ## Frontend Notes
 
 Immediate tuner, chord, and rhythm feedback remains browser-side to meet latency requirements. The frontend records consented sessions from the unprocessed mic stream as PCM WAV before app analysis, uploads completed recordings to the API, and does not upload high-frequency audio analysis events.
+
+Chord detection reliability is measured by a manual TypeScript eval harness in `apps/frontend/evals/chord-detection`. It reuses the frontend detector code path, caches public labelled guitar datasets and per-sample results under `.eval-cache/chord-detection/`, and reports verifier recall, false accepts, false rejects, per-chord metrics, and threshold sweeps.
 
 ## Backend Notes
 

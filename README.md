@@ -66,6 +66,27 @@ python3 -m pip install -e ".[dev]"
 python3 -m pytest
 ```
 
+### Chord Detection Evals
+
+Offline chord detection evals benchmark the browser chord matcher against public labelled guitar datasets. They are manual because the first full run downloads about 2.1 GB of cached dataset files.
+
+```sh
+pnpm eval:chords:prepare
+pnpm eval:chords
+pnpm eval:chords -- --limit 100
+pnpm eval:chords -- --force
+```
+
+Datasets and per-sample results are cached in `.eval-cache/chord-detection/`, which is ignored by git. The latest full baseline report is written to `.eval-cache/chord-detection/reports/latest.md`; see [apps/frontend/evals/chord-detection/README.md](apps/frontend/evals/chord-detection/README.md) for details.
+
+Current full eval baseline, generated 2026-05-29 IST from algorithm fingerprint `55679441ce783a38`:
+
+| Scope | Evaluated | Accuracy | Verifier recall | Wrong accepted |
+| --- | ---: | ---: | ---: | ---: |
+| Overall | 955 | 22.8% | 22.8% | 77.2% |
+| Isolated Guitar Chords | 54 | 16.7% | 16.7% | 83.3% |
+| GuitarSet | 901 | 23.2% | 23.2% | 76.8% |
+
 ## Privacy and Consent
 
 Realtime feedback stays in the browser. Recording upload is only enabled after explicit consent in Settings. The current implementation creates anonymous learner profiles; full account auth, retention controls, export, and deletion are planned before production use with real users.

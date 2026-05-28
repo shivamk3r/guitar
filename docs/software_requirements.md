@@ -90,6 +90,18 @@ The product closes the loop between "I played something" and "what should I do n
 - **NFR-5 Cloud portability.** The local stack should map to AWS: Postgres to RDS, MinIO to S3, LocalStack SQS to Amazon SQS, API/worker to container services.
 - **NFR-6 Performance.** Audio analysis must not drop UI frames; high-rate audio events must not be stored in React state.
 
+### 5.1 Current Chord Detection Eval Baseline
+
+The current chord detector is measured with the manual offline eval harness in `apps/frontend/evals/chord-detection`. The latest full eval run was generated 2026-05-29 IST (`2026-05-28T21:34:56.921Z`) against algorithm fingerprint `55679441ce783a38`.
+
+| Scope | Evaluated | Accuracy | Verifier recall | Wrong accepted |
+| --- | ---: | ---: | ---: | ---: |
+| Overall | 955 | 22.8% | 22.8% | 77.2% |
+| Isolated Guitar Chords | 54 | 16.7% | 16.7% | 83.3% |
+| GuitarSet | 901 | 23.2% | 23.2% | 76.8% |
+
+This is below **NFR-2** and confirms the current open-ended chroma/template matcher is not reliable enough for learner-trustworthy chord correctness. Future detection work should be evaluated against this harness and should prefer target-aware verification metrics, false accepts, false rejects, and per-chord recall over only top-1 recognizer accuracy.
+
 ## 6. Audio and Analysis Requirements
 
 - **AR-1** Immediate DSP uses Web Audio and AudioWorklet in the frontend.

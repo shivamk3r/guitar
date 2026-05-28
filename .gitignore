@@ -248,3 +248,6 @@ Thumbs.db
 # Local env
 .env.local
 .env.*.local
+
+# Local eval datasets/results
+.eval-cache/
