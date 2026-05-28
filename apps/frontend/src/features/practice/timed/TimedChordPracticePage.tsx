@@ -32,7 +32,7 @@ import {
   useTimedChordPracticeSession,
 } from "./useTimedChordPracticeSession";
 
-const LENGTH_OPTIONS = [8, 12, 16, 24];
+const LENGTH_OPTIONS = [8, 12, 16, 24, 48, 96];
 const BEATS_PER_CHORD_OPTIONS = [1, 2, 4];
 
 export function TimedChordPracticePage() {
@@ -169,6 +169,23 @@ export function TimedChordPracticePage() {
                 value,
                 label: `${value}`,
               }))}
+              help={
+                <InfoPopover
+                  label="Open length help"
+                  align="right"
+                  title="Length"
+                  links={
+                    <>
+                      <LearnTermLink termId="chord">Chord</LearnTermLink>
+                      <LearnTermLink termId="beat">Beat</LearnTermLink>
+                    </>
+                  }
+                >
+                  Length is the number of chord prompts in the session. Total beats are length x
+                  beats per chord, so longer values like 48 or 96 create multi-minute runs at slower
+                  tempos.
+                </InfoPopover>
+              }
             />
             <SelectField
               label="Count-in"

@@ -9,6 +9,8 @@ test.describe("timed chord practice", () => {
     await expect(page.getByText("Beat timeline")).toBeVisible();
     await expect(page.getByLabel("Scrolling beat timeline")).toBeVisible();
     await expect(page.getByText(/Selected:/)).toBeVisible();
+    const lengthSelect = page.getByLabel("Length", { exact: true });
+    await expect(lengthSelect.locator("option")).toHaveText(["8", "12", "16", "24", "48", "96"]);
 
     const timelineBox = await page.getByLabel("Scrolling beat timeline").boundingBox();
     const firstChordBox = await page.getByText("First chord").boundingBox();
@@ -22,11 +24,12 @@ test.describe("timed chord practice", () => {
     await page.getByLabel("BPM").fill("84");
     await page.getByLabel("Beats").selectOption("2");
     await page.getByLabel("Order").selectOption("reverse");
-    await page.getByLabel("Length").selectOption("8");
+    await lengthSelect.selectOption("96");
     await page.getByLabel("Count-in").selectOption("2");
 
     await expect(page.getByLabel("BPM")).toHaveValue("84");
     await expect(page.getByText("84 BPM · 2 beats per chord")).toBeVisible();
+    await expect(lengthSelect).toHaveValue("96");
     await expect(page.getByLabel("Count-in")).toHaveValue("2");
 
     await page.reload();
@@ -45,6 +48,19 @@ test.describe("timed chord practice", () => {
     await page.getByRole("button", { name: "Open beat help" }).click();
     await expect(page.getByRole("dialog", { name: "Beats" })).toContainText(
       "how many metronome beats each chord lasts",
+    );
+    await expect(page.getByRole("link", { name: "Beat" })).toHaveAttribute("href", "/learn/beat");
+
+    await page.getByRole("button", { name: "Open length help" }).click();
+    await expect(page.getByRole("dialog", { name: "Length" })).toContainText(
+      "number of chord prompts",
+    );
+    await expect(page.getByRole("dialog", { name: "Length" })).toContainText(
+      "length x beats per chord",
+    );
+    await expect(page.getByRole("link", { name: "Chord", exact: true })).toHaveAttribute(
+      "href",
+      "/learn/chord",
     );
     await expect(page.getByRole("link", { name: "Beat" })).toHaveAttribute("href", "/learn/beat");
 
@@ -69,7 +85,7 @@ test.describe("timed chord practice", () => {
 
   test("can start and stop with the fake browser microphone", async ({ page }) => {
     await page.goto("/practice/timed-chords");
-    await page.getByLabel("Length").selectOption("8");
+    await page.getByLabel("Length", { exact: true }).selectOption("8");
     await page.getByRole("button", { name: "Start" }).click();
     await expect(page.getByRole("button", { name: "Stop" })).toBeVisible();
     await expect(page.getByText("Get ready")).toBeVisible();
