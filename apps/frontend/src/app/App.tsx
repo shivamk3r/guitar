@@ -1,5 +1,7 @@
 import { ChordDetailPage } from "@/features/chord-library/ChordDetailPage";
 import { ChordLibraryPage } from "@/features/chord-library/ChordLibraryPage";
+import { ConceptPage } from "@/features/learn/ConceptPage";
+import { LearnPage } from "@/features/learn/LearnPage";
 import { PracticePage } from "@/features/practice/PracticePage";
 import { ChordChangeDrillPage } from "@/features/practice/drills/ChordChangeDrillPage";
 import { ProgressionDrillPage } from "@/features/practice/drills/ProgressionDrillPage";
@@ -42,16 +44,17 @@ export function App() {
   return (
     <div className="min-h-full flex flex-col">
       <header className="border-b border-white/5 bg-surface/80 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-4">
-          <Link to="/" className="text-ink font-semibold tracking-tight">
+        <div className="max-w-5xl mx-auto px-4 min-h-14 flex items-center gap-3 overflow-x-auto">
+          <Link to="/" className="text-ink font-semibold tracking-tight shrink-0">
             Guitar Coach
           </Link>
-          <nav aria-label="Primary" className="flex gap-1 ml-4">
+          <nav aria-label="Primary" className="flex gap-1 ml-2 shrink-0">
             <NavItem to="/" label="Tuner" />
             <NavItem to="/chords" label="Chord Library" />
             <NavItem to="/practice" label="Practice" />
+            <NavItem to="/learn" label="Learn" />
           </nav>
-          <div className="ml-auto">
+          <div className="ml-auto shrink-0">
             <NavItem to="/settings" label="Settings" />
           </div>
         </div>
@@ -68,6 +71,8 @@ export function App() {
             <Route path="/practice/chord-change" element={<ChordChangeDrillPage />} />
             <Route path="/practice/progression/:id" element={<ProgressionDrillPage />} />
             <Route path="/practice/strumming" element={<StrummingDrillPage />} />
+            <Route path="/learn" element={<LearnPage />} />
+            <Route path="/learn/:id" element={<ConceptPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

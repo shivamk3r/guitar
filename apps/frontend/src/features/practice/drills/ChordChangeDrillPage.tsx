@@ -1,5 +1,6 @@
 import { CHORDS, type ChordDef, getChord } from "@/data/chords";
 import { Button } from "@/ui/Button";
+import { LearnTermLink } from "@/ui/LearnTermLink";
 import { useMemo, useState } from "react";
 import { suggestBpmChange, usePractice } from "../practice-store";
 import { DrillShell } from "./DrillShell";
@@ -53,9 +54,11 @@ export function ChordChangeDrillPage() {
       sidebar={
         <div className="mt-6 space-y-4">
           <div>
-            <label className="text-sm text-muted">
-              Beats per chord change
+            <div className="text-sm text-muted">
+              <LearnTermLink termId="beat">Beats</LearnTermLink> per{" "}
+              <LearnTermLink termId="chord">chord</LearnTermLink> change
               <select
+                aria-label="Beats per chord change"
                 className="ml-2 bg-panel border border-white/10 rounded px-2 py-1 text-ink"
                 value={beatsPerChange}
                 onChange={(e) => setBeatsPerChange(Number(e.target.value))}
@@ -65,7 +68,7 @@ export function ChordChangeDrillPage() {
                 <option value={2}>2</option>
                 <option value={4}>4 (easier)</option>
               </select>
-            </label>
+            </div>
           </div>
           <ChordPicker
             selectedIds={selectedIds}

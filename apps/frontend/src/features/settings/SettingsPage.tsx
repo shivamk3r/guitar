@@ -69,6 +69,7 @@ export function SettingsPage() {
         <Field label="Audible metronome">
           <input
             type="checkbox"
+            aria-label="Audible metronome"
             checked={settings.metronomeAudible}
             onChange={(e) => settings.update({ metronomeAudible: e.target.checked })}
           />

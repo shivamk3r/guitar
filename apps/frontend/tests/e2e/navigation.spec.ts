@@ -7,14 +7,39 @@ test.describe("navigation", () => {
     await expect(page.getByRole("button", { name: "Start listening" })).toBeVisible();
   });
 
-  test("can navigate between the three sections", async ({ page }) => {
+  test("can navigate between the primary sections", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("link", { name: "Chord Library" }).click();
     await expect(page.getByRole("heading", { name: "Chord Library" })).toBeVisible();
     await page.getByRole("link", { name: "Practice" }).click();
     await expect(page.getByRole("heading", { name: "Practice" })).toBeVisible();
+    await page.getByRole("link", { name: "Learn" }).click();
+    await expect(page.getByRole("heading", { name: "Learn" })).toBeVisible();
     await page.getByRole("link", { name: "Tuner" }).click();
     await expect(page.getByRole("heading", { name: "Tuner" })).toBeVisible();
+  });
+
+  test("learn glossary supports search, category filters, and concept pages", async ({ page }) => {
+    await page.goto("/learn");
+    await expect(page.getByRole("heading", { name: "Learn" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Pitch\b/ })).toBeVisible();
+
+    const search = page.getByPlaceholder(/Search/i);
+    await search.fill("bpm");
+    await expect(page.getByRole("link", { name: /^Tempo\b/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Pitch\b/ })).not.toBeVisible();
+
+    await search.fill("");
+    await page.getByRole("button", { name: "Timing" }).click();
+    await expect(page.getByRole("link", { name: /^Beat\b/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Rhythm\b/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Fret\b/ })).not.toBeVisible();
+
+    await page.getByRole("link", { name: /^Tempo\b/ }).click();
+    await expect(page.getByRole("heading", { name: "Tempo" })).toBeVisible();
+    await expect(page.getByRole("img", { name: "Tempo animated concept visual" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /70 BPM/ })).toBeVisible();
+    await expect(page.getByText(/Practice screens let you set BPM/i)).toBeVisible();
   });
 
   test("chord library lists chord tiers", async ({ page }) => {
@@ -52,7 +77,7 @@ test.describe("navigation", () => {
   test("settings page renders and can toggle audible metronome", async ({ page }) => {
     await page.goto("/settings");
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-    const checkbox = page.getByRole("checkbox").first();
+    const checkbox = page.getByRole("checkbox", { name: "Audible metronome" });
     await expect(checkbox).not.toBeChecked();
     await checkbox.check();
     await expect(checkbox).toBeChecked();

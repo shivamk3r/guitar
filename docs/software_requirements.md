@@ -28,10 +28,11 @@ The product closes the loop between "I played something" and "what should I do n
 - **FR-T1** Detect the fundamental pitch of a plucked string from microphone input with +/-1 cent accuracy under quiet conditions.
 - **FR-T2** Display detected note, target note, and deviation in cents.
 - **FR-T3** Indicate "in tune" only when pitch is within +/-5 cents of target for at least 500 ms.
-- **FR-T4** Support standard tuning by default and alternate tunings including Drop D, Half-step down, DADGAD, and Open G.
-- **FR-T5** Work with acoustic guitar via built-in mic and electric guitar via audio interface input.
-- **FR-T6** If recording consent is enabled, record tuning sessions and upload them after capture for progress analysis.
-- **FR-T7** Show the current browser microphone input when available and let learners choose a preferred mic before starting audio feedback.
+- **FR-T4** Show a 5-second pitch stability trace in cents from the active string target, with a 0-cent target line, +/-5-cent acceptable band, and faded or broken unreliable samples.
+- **FR-T5** Support standard tuning by default and alternate tunings including Drop D, Half-step down, DADGAD, and Open G.
+- **FR-T6** Work with acoustic guitar via built-in mic and electric guitar via audio interface input.
+- **FR-T7** If recording consent is enabled, record tuning sessions and upload them after capture for progress analysis.
+- **FR-T8** Show the current browser microphone input when available and let learners choose a preferred mic before starting audio feedback.
 
 ### 4.2 Chord Library
 
@@ -52,7 +53,16 @@ The product closes the loop between "I played something" and "what should I do n
 - **FR-P6** If recording consent is enabled, practice sessions are recorded and uploaded for deeper progress analysis.
 - **FR-P7** Timed chord practice lets learners choose one or more chords, tempo, beats per chord, rotation order, and session length, then scores expected strum windows against detected onsets and chord chroma.
 
-### 4.4 Learning Intelligence and Data
+### 4.4 Learn Glossary
+
+- **FR-L1** Provide a Learn tab with beginner-friendly definitions for essential guitar and music terms including pitch, fret, cent, beat, semitone, sharp, flat, note, chord, tempo, rhythm, tuning, and string.
+- **FR-L2** Support glossary search and category filters so learners can find terms from tuner, chord, practice, notation, and timing contexts.
+- **FR-L3** Each glossary term has a dedicated concept page with plain-language explanation, an interactive visual animation, browser-generated audio examples, and where the term appears inside Guitar Coach.
+- **FR-L4** Tuner, chord, and practice screens link learner-facing terminology directly to the matching glossary concept page.
+- **FR-L5** Initial Learn lessons run entirely in the browser with Web Audio and UI animation; they do not require microphone input, recording upload, backend services, or learner consent.
+- **FR-L6** Later Learn milestones may add optional microphone exercises and progress-aware recommendations after consent and progress controls are available.
+
+### 4.5 Learning Intelligence and Data
 
 - **FR-D1** Create an anonymous learner profile before storing backend sessions; account auth is deferred.
 - **FR-D2** Store recording consent history before uploading tuning, chord-check, or practice audio.
@@ -113,7 +123,7 @@ Final score remains a weighted aggregate: 20% correctness, 50% cleanliness, 30% 
 ## 10. Milestones
 
 1. **M1 - Monorepo and local stack.** Frontend, FastAPI, Postgres, MinIO, LocalStack SQS, worker, and docs.
-2. **M2 - Reliable recording flow.** Consent UX, session recording, upload retry, and object lifecycle basics.
+2. **M2 - Reliable recording flow and first lessons.** Consent UX, session recording, upload retry, object lifecycle basics, and browser-only glossary lessons.
 3. **M3 - Analysis extraction.** Worker extracts pitch stability, timing consistency, chord cleanliness, and practice summaries.
 4. **M4 - Guidance engine.** Progress endpoint recommends lessons, drills, tempo changes, and weak-skill focus.
 5. **M5 - Accounts and controls.** Auth, sync, retention, export, deletion, and production deployment hardening.

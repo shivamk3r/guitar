@@ -1,5 +1,6 @@
 import { PROGRESSIONS } from "@/data/progressions";
 import { useProgress } from "@/storage/progress-store";
+import { LearnTermLink } from "@/ui/LearnTermLink";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
@@ -21,7 +22,9 @@ export function PracticePage() {
       <header className="mb-6">
         <h1 className="text-2xl font-semibold">Practice</h1>
         <p className="text-muted text-sm mt-1">
-          Short drills that listen and score each attempt. No streaks, just progress.
+          Short drills that listen for <LearnTermLink termId="chord">chords</LearnTermLink>,{" "}
+          <LearnTermLink termId="beat">beats</LearnTermLink>, and{" "}
+          <LearnTermLink termId="rhythm">rhythm</LearnTermLink>. No streaks, just progress.
         </p>
       </header>
 

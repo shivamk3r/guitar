@@ -3,6 +3,7 @@ import { ensureEngineStarted, getEngine, useEngineState } from "@/audio/useAudio
 import { useSettings } from "@/storage/settings-store";
 import { AudioInputSelect } from "@/ui/AudioInputSelect";
 import { Button } from "@/ui/Button";
+import { LearnTermLink } from "@/ui/LearnTermLink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Metronome } from "../metronome";
@@ -150,14 +151,16 @@ export function StrummingDrillPage() {
         <div>
           <h1 className="text-2xl font-semibold">Strumming pattern</h1>
           <p className="text-muted text-sm mt-1">
-            Lock into the pattern. Timing is scored per strum.
+            Lock into the <LearnTermLink termId="rhythm">rhythm</LearnTermLink>. Timing is scored
+            against the <LearnTermLink termId="beat">beat</LearnTermLink>.
           </p>
         </div>
         <div className="flex items-start gap-3 flex-wrap justify-end">
           <AudioInputSelect disabled={running} />
-          <label className="text-sm text-muted">
-            Pattern
+          <div className="text-sm text-muted">
+            <LearnTermLink termId="rhythm">Pattern</LearnTermLink>
             <select
+              aria-label="Strumming pattern"
               className="ml-2 bg-panel border border-white/10 rounded px-2 py-1 text-ink"
               value={patternId}
               onChange={(e) => setPatternId(e.target.value)}
@@ -169,11 +172,12 @@ export function StrummingDrillPage() {
                 </option>
               ))}
             </select>
-          </label>
-          <label className="text-sm text-muted flex items-center gap-2">
-            BPM
+          </div>
+          <div className="text-sm text-muted flex items-center gap-2">
+            <LearnTermLink termId="tempo">BPM</LearnTermLink>
             <input
               type="number"
+              aria-label="BPM"
               min={40}
               max={200}
               value={bpm}
@@ -181,7 +185,7 @@ export function StrummingDrillPage() {
               className="bg-panel border border-white/10 rounded px-2 py-1 text-ink w-20 tabular-nums"
               disabled={running}
             />
-          </label>
+          </div>
           {running ? (
             <Button variant="danger" onClick={stop}>
               Stop

@@ -1,12 +1,20 @@
 import { type ActiveRecordedSession, startRecordedSession } from "@/audio/sessionRecording";
 import { ensureEngineStarted, getEngine, useEngineState } from "@/audio/useAudioEngine";
-import { TUNINGS, getTuning } from "@/data/tunings";
+import { type StringTuning, TUNINGS, getTuning } from "@/data/tunings";
 import { NOTE_NAMES } from "@/lib/math";
 import { useSettings } from "@/storage/settings-store";
 import { AudioInputSelect } from "@/ui/AudioInputSelect";
 import { Button } from "@/ui/Button";
+import { LearnTermLink } from "@/ui/LearnTermLink";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PitchStabilityTrace, type PitchStabilityTraceHandle } from "./PitchStabilityTrace";
 import { TunerNeedle } from "./TunerNeedle";
+import {
+  centsFromTargetHz,
+  getStringTargetHz,
+  makePitchTraceSample,
+  resolveTraceTarget,
+} from "./pitch-trace";
 import { useTuner } from "./tuner-store";
 
 export function TunerPage() {
@@ -18,20 +26,44 @@ export function TunerPage() {
   const tuning = getTuning(tuningId);
   const [error, setError] = useState<string | null>(null);
   const recordingRef = useRef<ActiveRecordedSession | null>(null);
+  const traceRef = useRef<PitchStabilityTraceHandle | null>(null);
+  const activeTargetRef = useRef<StringTuning | null>(null);
+  const [activeTarget, setActiveTarget] = useState<StringTuning | null>(null);
 
   useEffect(() => {
+    activeTargetRef.current = null;
+    setActiveTarget(null);
+    traceRef.current?.reset();
+
     const engine = getEngine();
     const unsubPitch = engine.on("pitch", (e) => {
+      const nextTarget = resolveTraceTarget(activeTargetRef.current, tuning, e.hz);
+      if (activeTargetRef.current?.midi !== nextTarget.midi) {
+        activeTargetRef.current = nextTarget;
+        setActiveTarget(nextTarget);
+        traceRef.current?.reset();
+      }
+
+      traceRef.current?.appendSample(
+        makePitchTraceSample({
+          hz: e.hz,
+          t: e.t,
+          confidence: e.confidence,
+          rms: e.rms,
+          target: nextTarget,
+        }),
+      );
       ingestPitch(e.hz, e.confidence, e.t);
     });
     const unsubLevel = engine.on("level", (e) => {
+      traceRef.current?.setClock(e.t);
       if (e.rms < 0.003) ingestSilence();
     });
     return () => {
       unsubPitch();
       unsubLevel();
     };
-  }, [ingestPitch, ingestSilence]);
+  }, [ingestPitch, ingestSilence, tuning]);
 
   async function handleStart() {
     setError(null);
@@ -67,19 +99,19 @@ export function TunerPage() {
       recordingRef.current = null;
     }
     await getEngine().stop();
+    activeTargetRef.current = null;
+    setActiveTarget(null);
+    traceRef.current?.reset();
     reset();
   }
 
   const isRunning = engineState === "running";
-  const target = useMemo(() => {
-    if (!note) return null;
-    // Find the closest open-string target for the current tuning
-    const closest = tuning.strings.reduce(
-      (best, s) => (Math.abs(s.midi - note.midi) < Math.abs(best.midi - note.midi) ? s : best),
-      tuning.strings[0]!,
-    );
-    return closest;
-  }, [note, tuning]);
+  const target = activeTarget;
+  const centsFromTarget = useMemo(() => {
+    if (!note) return 0;
+    if (!target) return note.cents;
+    return centsFromTargetHz(hz, getStringTargetHz(target));
+  }, [hz, note, target]);
 
   return (
     <section>
@@ -87,7 +119,8 @@ export function TunerPage() {
         <div>
           <h1 className="text-2xl font-semibold">Tuner</h1>
           <p className="text-muted text-sm mt-1">
-            Pluck a single string and hold until the needle locks at centre.
+            Pluck a single <LearnTermLink termId="string">string</LearnTermLink> and hold until the{" "}
+            <LearnTermLink termId="pitch">pitch</LearnTermLink> locks near center.
           </p>
         </div>
         <div className="flex items-start gap-3 flex-wrap justify-end">
@@ -124,24 +157,36 @@ export function TunerPage() {
         ) : (
           <>
             <TunerNeedle
-              cents={note?.cents ?? 0}
+              cents={centsFromTarget}
               inTune={inTune}
               label={note ? `${note.name}${note.octave}` : "—"}
               targetLabel={target ? `${target.note}${target.octave}` : ""}
             />
+            <PitchStabilityTrace ref={traceRef} target={target} />
+            <p className="mt-3 text-xs text-muted">
+              The needle and trace show <LearnTermLink termId="cent">cents</LearnTermLink> from the
+              target in your selected <LearnTermLink termId="tuning">tuning</LearnTermLink>.
+            </p>
             <div className="mt-6 flex items-center justify-between text-sm text-muted">
               <div>
-                {status === "signal-weak"
-                  ? "Signal weak — pluck a string closer to the mic."
-                  : note
-                    ? `${hz.toFixed(2)} Hz`
-                    : "Waiting for a note…"}
+                {status === "signal-weak" ? (
+                  <>
+                    Signal weak — pluck a <LearnTermLink termId="string">string</LearnTermLink>{" "}
+                    closer to the mic.
+                  </>
+                ) : note ? (
+                  `${hz.toFixed(2)} Hz`
+                ) : (
+                  <>
+                    Waiting for a <LearnTermLink termId="note">note</LearnTermLink>…
+                  </>
+                )}
               </div>
               <Button variant="secondary" size="sm" onClick={handleStop}>
                 Stop
               </Button>
             </div>
-            <StringChecklist />
+            <StringChecklist activeTargetMidi={target?.midi ?? null} />
           </>
         )}
       </div>
@@ -149,20 +194,19 @@ export function TunerPage() {
   );
 }
 
-function StringChecklist() {
+function StringChecklist({ activeTargetMidi }: { activeTargetMidi: number | null }) {
   const tuningId = useSettings((s) => s.tuningId);
   const tuning = getTuning(tuningId);
-  const note = useTuner((s) => s.note);
   const inTune = useTuner((s) => s.inTune);
 
   // Track which strings the user has successfully locked this session
   const [locked, setLocked] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
-    if (inTune && note) {
-      setLocked((prev) => ({ ...prev, [note.midi]: true }));
+    if (inTune && activeTargetMidi != null) {
+      setLocked((prev) => ({ ...prev, [activeTargetMidi]: true }));
     }
-  }, [inTune, note]);
+  }, [activeTargetMidi, inTune]);
 
   return (
     <div className="mt-6 grid grid-cols-6 gap-2">
@@ -170,7 +214,7 @@ function StringChecklist() {
         const pc = ((s.midi % 12) + 12) % 12;
         const name = `${NOTE_NAMES[pc]}${s.octave}`;
         const done = locked[s.midi];
-        const current = note?.midi === s.midi;
+        const current = activeTargetMidi === s.midi;
         return (
           <div
             key={`${idx}-${s.midi}`}

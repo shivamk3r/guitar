@@ -8,6 +8,8 @@ import { useSettings } from "@/storage/settings-store";
 import { AudioInputSelect } from "@/ui/AudioInputSelect";
 import { Button } from "@/ui/Button";
 import { Fretboard, type StringState } from "@/ui/Fretboard";
+import { LearnTermLink } from "@/ui/LearnTermLink";
+import { LinkedFeedbackCue } from "@/ui/LinkedFeedbackCue";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useChordCheck } from "./chord-check-store";
@@ -189,7 +191,8 @@ function ChordDetailInner({ chordId }: { chordId: string }) {
         <div className="bg-panel rounded-lg p-6 border border-white/5">
           <h2 className="text-lg font-semibold">Check my chord</h2>
           <p className="text-muted text-sm mt-1">
-            Strum the chord once. The app will score what it hears.
+            Strum the <LearnTermLink termId="chord">chord</LearnTermLink> once. The app will score
+            the <LearnTermLink termId="string">strings</LearnTermLink> it hears.
           </p>
 
           {engineState !== "running" ? (
@@ -229,7 +232,9 @@ function ChordDetailInner({ chordId }: { chordId: string }) {
                       <span className="text-muted"> (or {lastResult.runnerUpId})</span>
                     )}
                   </div>
-                  <div className="mt-2 text-sm text-ink/80">{lastResult.scored.cue}</div>
+                  <div className="mt-2 text-sm text-ink/80">
+                    <LinkedFeedbackCue cue={lastResult.scored.cue} />
+                  </div>
                 </div>
               )}
 
