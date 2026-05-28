@@ -8,7 +8,7 @@ test.describe("timed chord practice", () => {
     await expect(page.getByLabel("Count-in")).toHaveValue("4");
     await expect(page.getByText("Beat timeline")).toBeVisible();
     await expect(page.getByLabel("Scrolling beat timeline")).toBeVisible();
-    await expect(page.getByText(/Using:/)).toBeVisible();
+    await expect(page.getByText(/Selected:/)).toBeVisible();
 
     await page.getByLabel("BPM").fill("84");
     await page.getByLabel("Beats").selectOption("2");

@@ -8,6 +8,11 @@ export interface AudioEngineOptions {
   sampleRate?: number;
 }
 
+export interface AudioInputFallback {
+  requestedDeviceId: string;
+  reason: "unavailable";
+}
+
 export interface AudioEngine {
   start(): Promise<void>;
   stop(): Promise<void>;
@@ -18,6 +23,7 @@ export interface AudioEngine {
   readonly mediaStream: MediaStream | null;
   readonly inputDeviceId: string | null;
   readonly activeInput: { deviceId: string | null; label: string } | null;
+  readonly inputFallback: AudioInputFallback | null;
   onStateChange(listener: (state: EngineState) => void): () => void;
 }
 
@@ -33,6 +39,7 @@ export function createAudioEngine(options: AudioEngineOptions = {}): AudioEngine
   let analyzer: AudioWorkletNode | null = null;
   let sinkGain: GainNode | null = null;
   let inputDeviceId: string | null = options.deviceId ?? null;
+  let inputFallback: AudioInputFallback | null = null;
 
   function setState(next: EngineState): void {
     state = next;
@@ -50,14 +57,18 @@ export function createAudioEngine(options: AudioEngineOptions = {}): AudioEngine
       // AudioContext may start suspended if called before user gesture — resume defensively.
       if (ctx.state === "suspended") await ctx.resume();
 
-      const audioConstraints: MediaTrackConstraints = {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: false,
-        channelCount: 1,
-      };
-      if (inputDeviceId) audioConstraints.deviceId = { exact: inputDeviceId };
-      stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+      inputFallback = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: createAudioConstraints(inputDeviceId),
+        });
+      } catch (err) {
+        if (!inputDeviceId || !isUnavailableInputError(err)) throw err;
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: createAudioConstraints(null),
+        });
+        inputFallback = { requestedDeviceId: inputDeviceId, reason: "unavailable" };
+      }
 
       await ctx.audioWorklet.addModule(WORKLET_URL);
       analyzer = new AudioWorkletNode(ctx, "guitar-analyzer", {
@@ -116,13 +127,11 @@ export function createAudioEngine(options: AudioEngineOptions = {}): AudioEngine
   async function setInputDeviceId(nextDeviceId: string | null): Promise<void> {
     const next = nextDeviceId?.trim() || null;
     if (inputDeviceId === next) return;
-    if (state === "starting" || state === "stopping") {
-      throw new Error("Cannot switch microphone while audio is starting or stopping.");
+    if (state === "starting" || state === "running" || state === "stopping") {
+      throw new Error("Cannot switch microphone while audio is active.");
     }
-    const wasRunning = state === "running";
-    if (wasRunning) await stop();
     inputDeviceId = next;
-    if (wasRunning) await start();
+    inputFallback = null;
   }
 
   return {
@@ -148,13 +157,37 @@ export function createAudioEngine(options: AudioEngineOptions = {}): AudioEngine
       if (!track) return null;
       const settings = track.getSettings();
       return {
-        deviceId: settings.deviceId ?? inputDeviceId,
-        label: track.label,
+        deviceId: settings.deviceId ?? null,
+        label: track.label || "",
       };
+    },
+    get inputFallback() {
+      return inputFallback;
     },
     onStateChange(listener) {
       stateListeners.add(listener);
       return () => stateListeners.delete(listener);
     },
   };
+}
+
+function createAudioConstraints(deviceId: string | null): MediaTrackConstraints {
+  const audioConstraints: MediaTrackConstraints = {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: false,
+    channelCount: 1,
+  };
+  if (deviceId) audioConstraints.deviceId = { exact: deviceId };
+  return audioConstraints;
+}
+
+function isUnavailableInputError(err: unknown): boolean {
+  const name = typeof err === "object" && err !== null && "name" in err ? String(err.name) : "";
+  return (
+    name === "OverconstrainedError" ||
+    name === "ConstraintNotSatisfiedError" ||
+    name === "NotFoundError" ||
+    name === "DevicesNotFoundError"
+  );
 }

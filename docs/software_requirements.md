@@ -32,7 +32,7 @@ The product closes the loop between "I played something" and "what should I do n
 - **FR-T5** Support standard tuning by default and alternate tunings including Drop D, Half-step down, DADGAD, and Open G.
 - **FR-T6** Work with acoustic guitar via built-in mic and electric guitar via audio interface input.
 - **FR-T7** If recording consent is enabled, record tuning sessions and upload them after capture for progress analysis.
-- **FR-T8** Show the current browser microphone input when available and let learners choose a preferred mic before starting audio feedback.
+- **FR-T8** Show the current browser microphone input when available, let learners choose a preferred mic before starting audio feedback, and show an input level meter while listening.
 
 ### 4.2 Chord Library
 
@@ -89,7 +89,8 @@ The product closes the loop between "I played something" and "what should I do n
 - **AR-4** Rhythm drills use onset detection with timestamps aligned to the audio clock.
 - **AR-5** Recording uses the already-granted microphone stream and does not replace the real-time feedback path.
 - **AR-6** Backend analysis is asynchronous and may use classical DSP, ML, or hybrid models in later milestones.
-- **AR-7** Browser audio input selection uses the selected `audioinput` device for realtime DSP and consented recording without uploading anything unless recording consent is enabled.
+- **AR-7** Browser audio input selection uses the selected `audioinput` device for realtime DSP and consented recording, falls back to browser default if the preferred device is unavailable, and disables switching during active scored or recorded sessions.
+- **AR-8** Microphone labels and device identifiers remain local browser UI/preference state and are not included in recording session metadata by default.
 
 ## 7. Data Model
 

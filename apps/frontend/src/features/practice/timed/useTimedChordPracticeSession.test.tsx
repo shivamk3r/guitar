@@ -1,3 +1,4 @@
+import { startRecordedSession } from "@/audio/sessionRecording";
 import { getChord } from "@/data/chords";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -104,6 +105,7 @@ describe("useTimedChordPracticeSession count-in", () => {
     vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
     engineMock.reset();
     metronomeMock.instances.length = 0;
+    vi.mocked(startRecordedSession).mockClear();
   });
 
   afterEach(() => {
@@ -149,6 +151,19 @@ describe("useTimedChordPracticeSession count-in", () => {
 
     expect(result.current.phase).toBe("scoring");
     expect(result.current.countInRemainingBeats).toBe(0);
+  });
+
+  it("keeps microphone identifiers out of recording metadata", async () => {
+    const { result } = renderHook(() => useTimedChordPracticeSession(configWithCountIn(0)));
+
+    await act(async () => {
+      await result.current.start();
+    });
+
+    expect(vi.mocked(startRecordedSession)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(startRecordedSession).mock.calls[0]?.[0].metadata).not.toHaveProperty(
+      "audioInputDeviceId",
+    );
   });
 });
 

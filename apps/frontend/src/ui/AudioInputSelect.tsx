@@ -3,9 +3,12 @@ import {
   addAudioInputChangeListener,
   listAudioInputDevices,
 } from "@/audio/devices";
+import { normalizeInputLevel } from "@/audio/level";
 import { getEngine, useEngineState } from "@/audio/useAudioEngine";
 import { useSettings } from "@/storage/settings-store";
 import { useEffect, useId, useMemo, useState } from "react";
+
+const LEVEL_UPDATE_INTERVAL_MS = 80;
 
 interface Props {
   disabled?: boolean;
@@ -18,6 +21,8 @@ export function AudioInputSelect({ disabled = false, className }: Props) {
   const settings = useSettings();
   const [devices, setDevices] = useState<AudioInputDevice[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const isAudioActive = engineState === "running";
+  const level = useInputLevel(isAudioActive);
   const isSwitchingDisabled =
     disabled ||
     engineState === "running" ||
@@ -49,18 +54,36 @@ export function AudioInputSelect({ disabled = false, className }: Props) {
     () => devices.find((device) => device.deviceId === settings.audioInputDeviceId),
     [devices, settings.audioInputDeviceId],
   );
-  const activeInput = getEngine().activeInput;
-  const visibleLabel =
-    activeInput?.label ||
-    selectedDevice?.label ||
-    (settings.audioInputDeviceId ? "Selected mic" : "Browser default");
+  const engine = getEngine();
+  const activeInput = engine.activeInput;
+  const fallback = engine.inputFallback;
+  const hasEnumeratedDeviceIds = devices.some((device) => device.deviceId && !device.isDefault);
+  const selectedDeviceMissing = Boolean(
+    settings.audioInputDeviceId && !selectedDevice && hasEnumeratedDeviceIds,
+  );
+  const visibleLabel = isAudioActive
+    ? activeInput?.label || (fallback ? "Browser default" : selectedDevice?.label) || "Microphone"
+    : selectedDevice?.label ||
+      (settings.audioInputDeviceId ? "Preferred microphone" : "Browser default");
+  const statusPrefix = isAudioActive ? "Using" : "Selected";
+  const notice = fallback
+    ? isAudioActive
+      ? "Selected microphone is unavailable. Using browser default."
+      : "Selected microphone was unavailable, so the browser default was used."
+    : selectedDeviceMissing
+      ? "Preferred microphone is not currently listed. The browser default will be used if it cannot be opened."
+      : null;
 
   async function handleChange(nextDeviceId: string) {
     const audioInputDeviceId = nextDeviceId || null;
     setError(null);
+    if (isSwitchingDisabled) {
+      setError("Stop listening before switching microphones.");
+      return;
+    }
     try {
       await settings.update({ audioInputDeviceId });
-      await getEngine().setInputDeviceId(audioInputDeviceId);
+      await engine.setInputDeviceId(audioInputDeviceId);
     } catch (err) {
       console.error("microphone switch failed", err);
       setError(err instanceof Error ? err.message : "Could not switch microphone.");
@@ -80,6 +103,11 @@ export function AudioInputSelect({ disabled = false, className }: Props) {
         disabled={isSwitchingDisabled}
       >
         <option value="">Browser default</option>
+        {settings.audioInputDeviceId && !selectedDevice && (
+          <option value={settings.audioInputDeviceId} disabled>
+            Preferred microphone
+          </option>
+        )}
         {devices
           .filter((device) => device.deviceId && !device.isDefault)
           .map((device) => (
@@ -89,9 +117,58 @@ export function AudioInputSelect({ disabled = false, className }: Props) {
           ))}
       </select>
       <div className="text-xs text-muted mt-1">
-        Using: <span className="text-ink">{visibleLabel}</span>
+        {statusPrefix}: <span className="text-ink">{visibleLabel}</span>
       </div>
-      {error && <div className="text-xs text-bad mt-1">{error}</div>}
+      {isAudioActive && <InputLevelMeter level={level} />}
+      {notice && <output className="mt-1 block max-w-xs text-xs text-warn">{notice}</output>}
+      {error && (
+        <div className="text-xs text-bad mt-1" role="alert">
+          {error}
+        </div>
+      )}
     </div>
   );
+}
+
+function InputLevelMeter({ level }: { level: number }) {
+  const percent = Math.round(level * 100);
+  return (
+    <div className="mt-2 w-44 max-w-full">
+      <div
+        aria-label="Input level"
+        aria-valuemax={100}
+        aria-valuemin={0}
+        aria-valuenow={percent}
+        className="h-1.5 overflow-hidden rounded-full bg-white/10"
+        role="meter"
+      >
+        <div
+          className="h-full bg-accent transition-[width] duration-75"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function useInputLevel(enabled: boolean): number {
+  const [level, setLevel] = useState(0);
+
+  useEffect(() => {
+    if (!enabled) {
+      setLevel(0);
+      return;
+    }
+
+    let lastUpdate = Number.NEGATIVE_INFINITY;
+    const unsubscribe = getEngine().on("level", (event) => {
+      const now = performance.now();
+      if (now - lastUpdate < LEVEL_UPDATE_INTERVAL_MS) return;
+      lastUpdate = now;
+      setLevel(normalizeInputLevel(event));
+    });
+    return unsubscribe;
+  }, [enabled]);
+
+  return level;
 }

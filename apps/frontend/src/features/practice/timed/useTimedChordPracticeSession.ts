@@ -308,7 +308,6 @@ export function useTimedChordPracticeSession(
           order: config.order,
           sessionLength: config.sessionLength,
           chords: config.chords.map((chord) => chord.id),
-          audioInputDeviceId: settings.audioInputDeviceId,
         },
       }).catch((err) => {
         console.error("session recording failed", err);

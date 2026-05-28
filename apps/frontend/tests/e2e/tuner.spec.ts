@@ -5,6 +5,8 @@ test.describe("tuner", () => {
     await page.goto("/");
     await expect(page.getByText(/The tuner needs microphone access/i)).toBeVisible();
     await expect(page.getByText(/Recording only starts if you enabled consent/i)).toBeVisible();
+    await expect(page.getByLabel("Microphone")).toBeVisible();
+    await expect(page.getByText(/Selected:/)).toBeVisible();
     await expect(page.getByRole("button", { name: "Start listening" })).toBeVisible();
   });
 
@@ -13,6 +15,9 @@ test.describe("tuner", () => {
     await page.getByRole("button", { name: "Start listening" }).click();
 
     await expect(page.getByRole("button", { name: "Stop" })).toBeVisible();
+    await expect(page.getByLabel("Microphone")).toBeDisabled();
+    await expect(page.getByRole("meter", { name: "Input level" })).toBeVisible();
+    await expect(page.getByText(/Using:/)).toBeVisible();
     await expect(page.getByRole("heading", { name: "Pitch stability" })).toBeVisible();
     await expect(page.getByRole("img", { name: /Pitch stability trace/i })).toBeVisible();
     await expect(page.getByText("Waiting for pitch")).toBeVisible();
