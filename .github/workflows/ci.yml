@@ -28,8 +28,17 @@ jobs:
           corepack enable
           corepack prepare pnpm@10.33.0 --activate
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Install backend dependencies
+        run: python3 -m pip install -e ".[dev]"
+        working-directory: apps/backend
 
       - name: Lint
         run: pnpm lint

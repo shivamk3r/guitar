@@ -6,7 +6,9 @@ settings:
 
 importers:
 
-  .:
+  .: {}
+
+  apps/frontend:
     dependencies:
       idb:
         specifier: ^8.0.0

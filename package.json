@@ -2,7 +2,7 @@
   "name": "guitar-coach",
   "private": true,
   "version": "0.1.0",
-  "description": "A browser-based guitar learning app with real-time microphone feedback.",
+  "description": "An end-to-end guitar learning platform with real-time feedback and consented practice analysis.",
   "license": "MIT",
   "type": "module",
   "repository": {
@@ -13,40 +13,20 @@
     "url": "https://github.com/shivamk3r/guitar/issues"
   },
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:e2e": "playwright test",
-    "lint": "biome check .",
-    "format": "biome format --write .",
-    "typecheck": "tsc -b --noEmit"
-  },
-  "dependencies": {
-    "idb": "^8.0.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.28.0",
-    "zustand": "^5.0.2"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
-    "@playwright/test": "^1.49.0",
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.1.0",
-    "@testing-library/user-event": "^14.5.2",
-    "@types/node": "^22.10.1",
-    "@types/react": "^18.3.14",
-    "@types/react-dom": "^18.3.2",
-    "@vitejs/plugin-react": "^4.3.4",
-    "autoprefixer": "^10.4.20",
-    "jsdom": "^25.0.1",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.15",
-    "typescript": "^5.7.2",
-    "vite": "^6.0.3",
-    "vitest": "^2.1.8"
+    "dev": "docker compose up --build",
+    "dev:frontend": "pnpm --filter @guitar/frontend dev",
+    "build": "pnpm --filter @guitar/frontend build",
+    "preview": "pnpm --filter @guitar/frontend preview",
+    "test": "pnpm test:frontend && pnpm test:backend",
+    "test:frontend": "pnpm --filter @guitar/frontend test",
+    "test:backend": "cd apps/backend && python3 -m pytest",
+    "test:e2e": "pnpm --filter @guitar/frontend test:e2e",
+    "lint": "pnpm lint:frontend && pnpm lint:backend",
+    "lint:frontend": "pnpm --filter @guitar/frontend lint",
+    "lint:backend": "cd apps/backend && python3 -m compileall app tests",
+    "format": "pnpm --filter @guitar/frontend format",
+    "typecheck": "pnpm --filter @guitar/frontend typecheck",
+    "compose:config": "docker compose config"
   },
   "packageManager": "pnpm@10.33.0"
 }
