@@ -43,6 +43,7 @@ test.describe("navigation", () => {
 
   test("practice page shows drills and progressions", async ({ page }) => {
     await page.goto("/practice");
+    await expect(page.getByText("Timed chord practice")).toBeVisible();
     await expect(page.getByText("Chord change drill")).toBeVisible();
     await expect(page.getByText("Strumming pattern drill")).toBeVisible();
     await expect(page.getByText(/I–IV–V in G/)).toBeVisible();
@@ -51,7 +52,7 @@ test.describe("navigation", () => {
   test("settings page renders and can toggle audible metronome", async ({ page }) => {
     await page.goto("/settings");
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-    const checkbox = page.getByRole("checkbox");
+    const checkbox = page.getByRole("checkbox").first();
     await expect(checkbox).not.toBeChecked();
     await checkbox.check();
     await expect(checkbox).toBeChecked();

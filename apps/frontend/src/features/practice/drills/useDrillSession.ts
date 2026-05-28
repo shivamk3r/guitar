@@ -1,11 +1,7 @@
+import { classifyStrings, expectedRingsMask, matchChord } from "@/audio/chord-detection";
 import { type ActiveRecordedSession, startRecordedSession } from "@/audio/sessionRecording";
 import { ensureEngineStarted, getEngine } from "@/audio/useAudioEngine";
 import type { ChordDef } from "@/data/chords";
-import {
-  classifyStrings,
-  expectedRingsMask,
-  matchChord,
-} from "@/features/chord-library/chord-detection";
 import { useProgress } from "@/storage/progress-store";
 import { useSettings } from "@/storage/settings-store";
 import { useCallback, useEffect, useRef, useState } from "react";

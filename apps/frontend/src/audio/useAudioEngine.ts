@@ -1,3 +1,4 @@
+import { useSettings } from "@/storage/settings-store";
 import { useEffect, useState } from "react";
 import { type AudioEngine, type EngineState, createAudioEngine } from "./engine";
 
@@ -21,6 +22,7 @@ export function useEngineState(): EngineState {
 
 export async function ensureEngineStarted(): Promise<AudioEngine> {
   const engine = getEngine();
+  await engine.setInputDeviceId(useSettings.getState().audioInputDeviceId);
   if (engine.state === "running" || engine.state === "starting") return engine;
   await engine.start();
   return engine;

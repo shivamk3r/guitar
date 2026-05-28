@@ -1,6 +1,7 @@
 import { type ActiveRecordedSession, startRecordedSession } from "@/audio/sessionRecording";
 import { ensureEngineStarted, getEngine, useEngineState } from "@/audio/useAudioEngine";
 import { useSettings } from "@/storage/settings-store";
+import { AudioInputSelect } from "@/ui/AudioInputSelect";
 import { Button } from "@/ui/Button";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -152,7 +153,8 @@ export function StrummingDrillPage() {
             Lock into the pattern. Timing is scored per strum.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-start gap-3 flex-wrap justify-end">
+          <AudioInputSelect disabled={running} />
           <label className="text-sm text-muted">
             Pattern
             <select

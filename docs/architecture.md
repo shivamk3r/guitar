@@ -28,7 +28,7 @@ guitar/
 
 - **Frontend (`apps/frontend`)**
   - Owns React routes, UI, Web Audio/AudioWorklet DSP, immediate scoring, and browser recording orchestration.
-  - Stores local settings and anonymous learner identifiers in IndexedDB.
+  - Stores local settings, preferred microphone input, and anonymous learner identifiers in IndexedDB.
   - Uploads recordings to the API only after explicit consent.
 
 - **API (`apps/backend/app/main.py`)**
@@ -75,11 +75,12 @@ The API uses anonymous learner profiles for now. Account auth is a later milesto
 1. Learner enables recording consent in Settings.
 2. Frontend creates or reuses an anonymous learner profile.
 3. Tuner, chord-check, and practice sessions continue using Web Audio for immediate feedback.
-4. When a consented session starts, the frontend creates a backend session and starts `MediaRecorder` on the existing mic stream.
-5. When the session stops, the frontend uploads the recorded audio blob to the API.
-6. API stores metadata in Postgres, stores audio in MinIO, and enqueues an SQS analysis job.
-7. Worker consumes the job and writes `AnalysisResult` rows.
-8. Progress endpoints use session and analysis history to guide the learner.
+4. The learner can choose a browser `audioinput` device before starting the audio engine.
+5. When a consented session starts, the frontend creates a backend session and starts `MediaRecorder` on the existing mic stream.
+6. When the session stops, the frontend uploads the recorded audio blob to the API.
+7. API stores metadata in Postgres, stores audio in MinIO, and enqueues an SQS analysis job.
+8. Worker consumes the job and writes `AnalysisResult` rows.
+9. Progress endpoints use session and analysis history to guide the learner.
 
 ## 7. Local Runtime
 

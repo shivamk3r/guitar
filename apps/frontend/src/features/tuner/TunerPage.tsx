@@ -3,6 +3,7 @@ import { ensureEngineStarted, getEngine, useEngineState } from "@/audio/useAudio
 import { TUNINGS, getTuning } from "@/data/tunings";
 import { NOTE_NAMES } from "@/lib/math";
 import { useSettings } from "@/storage/settings-store";
+import { AudioInputSelect } from "@/ui/AudioInputSelect";
 import { Button } from "@/ui/Button";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TunerNeedle } from "./TunerNeedle";
@@ -89,7 +90,8 @@ export function TunerPage() {
             Pluck a single string and hold until the needle locks at centre.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-start gap-3 flex-wrap justify-end">
+          <AudioInputSelect />
           <label className="text-sm text-muted">
             Tuning
             <select
