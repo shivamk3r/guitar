@@ -51,7 +51,7 @@ test.describe("navigation", () => {
   test("settings page renders and can toggle audible metronome", async ({ page }) => {
     await page.goto("/settings");
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-    const checkbox = page.getByRole("checkbox");
+    const checkbox = page.getByRole("checkbox", { name: "Audible metronome" });
     await expect(checkbox).not.toBeChecked();
     await checkbox.check();
     await expect(checkbox).toBeChecked();

@@ -28,9 +28,10 @@ The product closes the loop between "I played something" and "what should I do n
 - **FR-T1** Detect the fundamental pitch of a plucked string from microphone input with +/-1 cent accuracy under quiet conditions.
 - **FR-T2** Display detected note, target note, and deviation in cents.
 - **FR-T3** Indicate "in tune" only when pitch is within +/-5 cents of target for at least 500 ms.
-- **FR-T4** Support standard tuning by default and alternate tunings including Drop D, Half-step down, DADGAD, and Open G.
-- **FR-T5** Work with acoustic guitar via built-in mic and electric guitar via audio interface input.
-- **FR-T6** If recording consent is enabled, record tuning sessions and upload them after capture for progress analysis.
+- **FR-T4** Show a 5-second pitch stability trace in cents from the active string target, with a 0-cent target line, +/-5-cent acceptable band, and faded or broken unreliable samples.
+- **FR-T5** Support standard tuning by default and alternate tunings including Drop D, Half-step down, DADGAD, and Open G.
+- **FR-T6** Work with acoustic guitar via built-in mic and electric guitar via audio interface input.
+- **FR-T7** If recording consent is enabled, record tuning sessions and upload them after capture for progress analysis.
 
 ### 4.2 Chord Library
 
