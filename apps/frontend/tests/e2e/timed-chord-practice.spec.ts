@@ -48,7 +48,7 @@ test.describe("timed chord practice", () => {
     );
 
     const timeline = page.getByLabel("Scrolling beat timeline");
-    const firstWindow = page.getByLabel("A strum window at beat 1");
+    const firstWindow = page.getByLabel("A strum window at beat 0");
     const timelineBox = await timeline.boundingBox();
     const windowBox = await firstWindow.boundingBox();
     expect(timelineBox).not.toBeNull();
@@ -64,7 +64,10 @@ test.describe("timed chord practice", () => {
     await page.getByRole("button", { name: "Start" }).click();
     await expect(page.getByRole("button", { name: "Stop" })).toBeVisible();
     await expect(page.getByText("Get ready")).toBeVisible();
-    await expect(page.locator("[aria-live='polite']")).toContainText(/[1-4]/);
+    await expect(page.locator("[aria-live='polite']")).toContainText(/Count-in -[1-4]/);
+    const timeline = page.getByLabel("Scrolling beat timeline");
+    await expect(timeline.getByText("-4", { exact: true })).toBeVisible();
+    await expect(timeline.getByText("0", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Stop" }).click();
     await expect(page.getByText("Next step")).toBeVisible();
   });

@@ -16,8 +16,7 @@ export function getCenteredBeatWindow(input: {
   visibleBeats: number;
 }): CenteredBeatWindow {
   const visibleBeats = Math.max(1, Math.floor(input.visibleBeats));
-  const playheadBeat = Math.max(0, input.playheadBeat);
-  const startBeat = playheadBeat - visibleBeats / 2;
+  const startBeat = input.playheadBeat - visibleBeats / 2;
   return {
     startBeat,
     endBeat: startBeat + visibleBeats,
@@ -35,6 +34,20 @@ export function getVisibleWholeBeats(window: CenteredBeatWindow): number[] {
   const beats: number[] = [];
   for (let beat = firstBeat; beat <= lastBeat; beat++) beats.push(beat);
   return beats;
+}
+
+export function getVisibleTimelineBeats(input: {
+  window: CenteredBeatWindow;
+  minBeat: number;
+  maxBeat: number;
+}): number[] {
+  const minBeat = Math.ceil(input.minBeat);
+  const maxBeat = Math.floor(input.maxBeat);
+  return getVisibleWholeBeats(input.window).filter((beat) => beat >= minBeat && beat <= maxBeat);
+}
+
+export function formatTimelineBeatLabel(beat: number): string {
+  return `${beat}`;
 }
 
 export function isTimelinePercentVisible(percent: number, overscanPercent = 8): boolean {

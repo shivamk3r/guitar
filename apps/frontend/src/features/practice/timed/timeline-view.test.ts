@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   beatToTimelinePercent,
+  formatTimelineBeatLabel,
   getCenteredBeatWindow,
   getVisibleBeatCount,
+  getVisibleTimelineBeats,
   getVisibleWholeBeats,
 } from "./timeline-view";
 
@@ -27,5 +29,18 @@ describe("timeline-view", () => {
 
     expect(window).toEqual({ startBeat: -1.75, endBeat: 8.25, visibleBeats: 10 });
     expect(getVisibleWholeBeats(window)).toEqual([-1, 0, 1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
+  it("keeps negative count-in beats in the centered timeline window", () => {
+    const window = getCenteredBeatWindow({ playheadBeat: -4, visibleBeats: 12 });
+    const labels = getVisibleTimelineBeats({
+      window,
+      minBeat: -4,
+      maxBeat: 8,
+    }).map(formatTimelineBeatLabel);
+
+    expect(window).toEqual({ startBeat: -10, endBeat: 2, visibleBeats: 12 });
+    expect(labels).toEqual(["-4", "-3", "-2", "-1", "0", "1", "2"]);
+    expect(beatToTimelinePercent(-4, window)).toBe(50);
   });
 });

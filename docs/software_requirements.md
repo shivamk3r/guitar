@@ -51,7 +51,7 @@ The product closes the loop between "I played something" and "what should I do n
 - **FR-P4** Adaptive tempo recommends slowing down or speeding up based on rolling scores.
 - **FR-P5** Session summaries show practiced material, score trends, BPM ceilings, and next-step guidance.
 - **FR-P6** If recording consent is enabled, practice sessions are recorded and uploaded for deeper progress analysis.
-- **FR-P7** Timed chord practice lets learners choose one or more chords, tempo, beats per chord, rotation order, session length, and a local count-in preference of off, 2 beats, 4 beats, or 8 beats. The default count-in is 4 beats. Count-in time starts the audio engine and optional metronome clicks but is excluded from scoring, timeline progress, summaries, and recommendations.
+- **FR-P7** Timed chord practice lets learners choose one or more chords, tempo, beats per chord, rotation order, session length, and a local count-in preference of off, 2 beats, 4 beats, or 8 beats. The default count-in is 4 beats. Count-in time starts the audio engine, optional metronome clicks, and visual timeline pre-roll, but is excluded from scoring, scored progress, summaries, and recommendations.
 
 ### 4.4 Learn Glossary
 
