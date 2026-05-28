@@ -1,4 +1,9 @@
 import { CHORDS, type ChordDef, getChord } from "@/data/chords";
+import {
+  TIMED_PRACTICE_COUNT_IN_OPTIONS,
+  type TimedPracticeCountInBeats,
+} from "@/storage/preferences";
+import { useSettings } from "@/storage/settings-store";
 import { AudioInputSelect } from "@/ui/AudioInputSelect";
 import { Button } from "@/ui/Button";
 import { Fretboard, type StringState } from "@/ui/Fretboard";
@@ -31,6 +36,7 @@ const LENGTH_OPTIONS = [8, 12, 16, 24];
 const BEATS_PER_CHORD_OPTIONS = [1, 2, 4];
 
 export function TimedChordPracticePage() {
+  const settings = useSettings();
   const [selectedIds, setSelectedIds] = useState<string[]>(["A", "D"]);
   const [bpm, setBpm] = useState(72);
   const [beatsPerChord, setBeatsPerChord] = useState(4);
@@ -41,8 +47,15 @@ export function TimedChordPracticePage() {
     [selectedIds],
   );
   const sessionConfig = useMemo(
-    () => ({ chords, bpm, beatsPerChord, order, sessionLength }),
-    [beatsPerChord, bpm, chords, order, sessionLength],
+    () => ({
+      chords,
+      bpm,
+      beatsPerChord,
+      order,
+      sessionLength,
+      countInBeats: settings.timedPracticeCountInBeats,
+    }),
+    [beatsPerChord, bpm, chords, order, sessionLength, settings.timedPracticeCountInBeats],
   );
   const previewPlan = useMemo(
     () =>
@@ -72,6 +85,12 @@ export function TimedChordPracticePage() {
     setSelectedIds((current) =>
       current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
     );
+  }
+
+  function updateCountIn(value: number) {
+    settings
+      .update({ timedPracticeCountInBeats: value as TimedPracticeCountInBeats })
+      .catch((err) => console.error("timed practice count-in preference failed", err));
   }
 
   return (
@@ -152,6 +171,16 @@ export function TimedChordPracticePage() {
                 label: `${value}`,
               }))}
             />
+            <SelectField
+              label="Count-in"
+              value={settings.timedPracticeCountInBeats}
+              disabled={session.running}
+              onChange={updateCountIn}
+              options={TIMED_PRACTICE_COUNT_IN_OPTIONS.map((value) => ({
+                value,
+                label: value === 0 ? "Off" : `${value} beats`,
+              }))}
+            />
             {session.running ? (
               <Button variant="danger" onClick={session.stop}>
                 Stop
@@ -184,9 +213,24 @@ export function TimedChordPracticePage() {
           <div className="grid lg:grid-cols-[minmax(260px,0.8fr)_minmax(0,1.2fr)] gap-6 mb-6">
             <div className="bg-panel rounded-lg p-6 border border-white/5 flex flex-col items-center">
               <div className="text-sm text-muted mb-1">
-                {session.running ? "Now" : "First chord"}
+                {session.phase === "count-in"
+                  ? "Get ready"
+                  : session.running
+                    ? "Now"
+                    : "First chord"}
               </div>
               <div className="text-5xl font-semibold mb-3">{currentChord.name}</div>
+              {session.phase === "count-in" && (
+                <div
+                  className="mb-4 rounded-md border border-accent/30 bg-accent/10 px-4 py-3 text-center"
+                  aria-live="polite"
+                >
+                  <div className="text-xs uppercase tracking-wide text-accent">Count-in</div>
+                  <div className="text-4xl font-semibold tabular-nums">
+                    {session.countInRemainingBeats}
+                  </div>
+                </div>
+              )}
               <Fretboard chord={currentChord} stringStates={stringStates} size="lg" />
               {upcomingChord && (
                 <div className="mt-4 text-sm text-muted">
@@ -209,7 +253,9 @@ export function TimedChordPracticePage() {
                   <ScoreMetric label="Clean" value={lastAttempt.score.cleanliness} />
                 </div>
               ) : (
-                <div className="text-sm text-muted">Ready.</div>
+                <div className="text-sm text-muted">
+                  {session.phase === "count-in" ? "Scoring starts after the count-in." : "Ready."}
+                </div>
               )}
               {lastAttempt && (
                 <div className="mt-4 text-sm">

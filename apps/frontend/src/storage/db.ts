@@ -1,4 +1,8 @@
 import { type DBSchema, type IDBPDatabase, openDB } from "idb";
+import {
+  DEFAULT_TIMED_PRACTICE_COUNT_IN_BEATS,
+  type TimedPracticeCountInBeats,
+} from "./preferences";
 
 export interface SettingsRow {
   id: "singleton";
@@ -6,6 +10,7 @@ export interface SettingsRow {
   audioInputDeviceId: string | null;
   metronomeAudible: boolean;
   metronomeVolume: number;
+  timedPracticeCountInBeats: TimedPracticeCountInBeats;
   lastCalibrationQuality: "silent" | "quiet" | "good" | "clipping" | null;
   sessionsThisWeek: number;
   lastSessionIso: string | null;
@@ -92,6 +97,7 @@ export const DEFAULT_SETTINGS: SettingsRow = {
   audioInputDeviceId: null,
   metronomeAudible: false,
   metronomeVolume: 0.3,
+  timedPracticeCountInBeats: DEFAULT_TIMED_PRACTICE_COUNT_IN_BEATS,
   lastCalibrationQuality: null,
   sessionsThisWeek: 0,
   lastSessionIso: null,

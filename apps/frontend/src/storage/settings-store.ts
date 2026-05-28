@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { DEFAULT_SETTINGS, type SettingsRow, getDb } from "./db";
+import { normalizeTimedPracticeCountInBeats } from "./preferences";
 
 interface SettingsState extends SettingsRow {
   hydrated: boolean;
@@ -13,8 +14,16 @@ export const useSettings = create<SettingsState>()((set, get) => ({
   async hydrate() {
     const db = await getDb();
     const existing = await db.get("settings", "singleton");
-    if (existing) set({ ...DEFAULT_SETTINGS, ...existing, hydrated: true });
-    else {
+    if (existing) {
+      const next = {
+        ...DEFAULT_SETTINGS,
+        ...existing,
+        timedPracticeCountInBeats: normalizeTimedPracticeCountInBeats(
+          existing.timedPracticeCountInBeats,
+        ),
+      };
+      set({ ...next, hydrated: true });
+    } else {
       await db.put("settings", DEFAULT_SETTINGS);
       set({ ...DEFAULT_SETTINGS, hydrated: true });
     }
@@ -27,6 +36,7 @@ export const useSettings = create<SettingsState>()((set, get) => ({
       audioInputDeviceId: current.audioInputDeviceId,
       metronomeAudible: current.metronomeAudible,
       metronomeVolume: current.metronomeVolume,
+      timedPracticeCountInBeats: current.timedPracticeCountInBeats,
       lastCalibrationQuality: current.lastCalibrationQuality,
       sessionsThisWeek: current.sessionsThisWeek,
       lastSessionIso: current.lastSessionIso,
@@ -42,6 +52,7 @@ export const useSettings = create<SettingsState>()((set, get) => ({
       audioInputDeviceId: current.audioInputDeviceId,
       metronomeAudible: current.metronomeAudible,
       metronomeVolume: current.metronomeVolume,
+      timedPracticeCountInBeats: current.timedPracticeCountInBeats,
       lastCalibrationQuality: current.lastCalibrationQuality,
       sessionsThisWeek: current.sessionsThisWeek,
       lastSessionIso: current.lastSessionIso,
@@ -52,6 +63,9 @@ export const useSettings = create<SettingsState>()((set, get) => ({
       recordingConsentUpdatedIso: current.recordingConsentUpdatedIso,
       ...patch,
     };
+    next.timedPracticeCountInBeats = normalizeTimedPracticeCountInBeats(
+      next.timedPracticeCountInBeats,
+    );
     set(next);
     try {
       const db = await getDb();

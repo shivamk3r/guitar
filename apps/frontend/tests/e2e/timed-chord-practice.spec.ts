@@ -5,6 +5,7 @@ test.describe("timed chord practice", () => {
     await page.goto("/practice/timed-chords");
     await expect(page.getByRole("heading", { name: "Timed chord practice" })).toBeVisible();
     await expect(page.getByLabel("BPM")).toHaveValue("72");
+    await expect(page.getByLabel("Count-in")).toHaveValue("4");
     await expect(page.getByText("Beat timeline")).toBeVisible();
     await expect(page.getByLabel("Scrolling beat timeline")).toBeVisible();
     await expect(page.getByText(/Using:/)).toBeVisible();
@@ -13,9 +14,14 @@ test.describe("timed chord practice", () => {
     await page.getByLabel("Beats").selectOption("2");
     await page.getByLabel("Order").selectOption("reverse");
     await page.getByLabel("Length").selectOption("8");
+    await page.getByLabel("Count-in").selectOption("2");
 
     await expect(page.getByLabel("BPM")).toHaveValue("84");
     await expect(page.getByText("84 BPM · 2 beats per chord")).toBeVisible();
+    await expect(page.getByLabel("Count-in")).toHaveValue("2");
+
+    await page.reload();
+    await expect(page.getByLabel("Count-in")).toHaveValue("2");
   });
 
   test("shows contextual learning help and centers the play line", async ({ page }) => {
@@ -57,6 +63,8 @@ test.describe("timed chord practice", () => {
     await page.getByLabel("Length").selectOption("8");
     await page.getByRole("button", { name: "Start" }).click();
     await expect(page.getByRole("button", { name: "Stop" })).toBeVisible();
+    await expect(page.getByText("Get ready")).toBeVisible();
+    await expect(page.locator("[aria-live='polite']")).toContainText(/[1-4]/);
     await page.getByRole("button", { name: "Stop" }).click();
     await expect(page.getByText("Next step")).toBeVisible();
   });

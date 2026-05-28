@@ -2,6 +2,7 @@ import { classifyStrings, expectedRingsMask, matchChord } from "@/audio/chord-de
 import { type ActiveRecordedSession, startRecordedSession } from "@/audio/sessionRecording";
 import { ensureEngineStarted, getEngine } from "@/audio/useAudioEngine";
 import type { ChordDef } from "@/data/chords";
+import type { TimedPracticeCountInBeats } from "@/storage/preferences";
 import { useProgress } from "@/storage/progress-store";
 import { useSettings } from "@/storage/settings-store";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -24,16 +25,19 @@ export interface TimedChordPracticeConfig {
   beatsPerChord: number;
   order: TimedPracticeOrder;
   sessionLength: number;
+  countInBeats: TimedPracticeCountInBeats;
 }
 
 export interface TimedChordPracticeSession {
   status: "idle" | "running" | "ended";
+  phase: "idle" | "count-in" | "scoring" | "ended";
   running: boolean;
   plan: TimedPracticePlanItem[];
   attempts: TimedPracticeAttempt[];
   strumMarkers: TimedPracticeStrumMarker[];
   summary: TimedPracticeSummary | null;
   playheadBeat: number;
+  countInRemainingBeats: number;
   currentIndex: number;
   error: string | null;
   start: () => Promise<void>;
@@ -59,11 +63,13 @@ export function useTimedChordPracticeSession(
   config: TimedChordPracticeConfig,
 ): TimedChordPracticeSession {
   const [status, setStatus] = useState<TimedChordPracticeSession["status"]>("idle");
+  const [phase, setPhase] = useState<TimedChordPracticeSession["phase"]>("idle");
   const [plan, setPlan] = useState<TimedPracticePlanItem[]>([]);
   const [attempts, setAttempts] = useState<TimedPracticeAttempt[]>([]);
   const [strumMarkers, setStrumMarkers] = useState<TimedPracticeStrumMarker[]>([]);
   const [summary, setSummary] = useState<TimedPracticeSummary | null>(null);
   const [playheadBeat, setPlayheadBeat] = useState(0);
+  const [countInRemainingBeats, setCountInRemainingBeats] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const metronomeRef = useRef<Metronome | null>(null);
@@ -150,6 +156,8 @@ export function useTimedChordPracticeSession(
     const finalSummary = summarizeTimedPractice(finalAttempts);
     setSummary(finalSummary);
     setStatus("ended");
+    setPhase("ended");
+    setCountInRemainingBeats(0);
     startAudioTimeRef.current = null;
     activePlanRef.current = [];
     pendingCapturesRef.current.clear();
@@ -276,6 +284,8 @@ export function useTimedChordPracticeSession(
       setStrumMarkers([]);
       setSummary(null);
       setPlayheadBeat(0);
+      setCountInRemainingBeats(config.countInBeats);
+      setPhase(config.countInBeats > 0 ? "count-in" : "scoring");
 
       const nextPlan = buildTimedPracticePlan({
         chordIds: config.chords.map((chord) => chord.id),
@@ -294,6 +304,7 @@ export function useTimedChordPracticeSession(
           practiceMode: "timed_chord_practice",
           bpm: config.bpm,
           beatsPerChord: config.beatsPerChord,
+          countInBeats: config.countInBeats,
           order: config.order,
           sessionLength: config.sessionLength,
           chords: config.chords.map((chord) => chord.id),
@@ -308,11 +319,21 @@ export function useTimedChordPracticeSession(
         bpm: config.bpm,
         audible: settings.metronomeAudible,
         volume: settings.metronomeVolume,
-        onBeat: () => {},
+        onBeat: ({ beat }) => {
+          if (config.countInBeats > 0 && beat < config.countInBeats) {
+            setPhase("count-in");
+            setCountInRemainingBeats(config.countInBeats - beat);
+            return;
+          }
+          setCountInRemainingBeats(0);
+          setPhase("scoring");
+        },
       });
       metronome.start(ctx);
       metronomeRef.current = metronome;
-      const startAudioTime = metronome.startedAtAudioTime ?? ctx.currentTime;
+      const metronomeStartAudioTime = metronome.startedAtAudioTime ?? ctx.currentTime;
+      const startAudioTime =
+        metronomeStartAudioTime + config.countInBeats * secondsPerBeatRef.current;
       startAudioTimeRef.current = startAudioTime;
       secondsPerBeatRef.current = 60 / config.bpm;
       const activePlan = nextPlan
@@ -356,6 +377,8 @@ export function useTimedChordPracticeSession(
       console.error(err);
       setError(err instanceof Error ? err.message : "Could not start timed practice.");
       setStatus("idle");
+      setPhase("idle");
+      setCountInRemainingBeats(0);
     }
   }, [clearTimers, config, createMiss, finishSession, settings, startPlayhead]);
 
@@ -370,6 +393,7 @@ export function useTimedChordPracticeSession(
       const activePlan = activePlanRef.current;
       const startAudioTime = startAudioTimeRef.current;
       if (activePlan.length === 0 || startAudioTime == null) return;
+      if (event.t < startAudioTime) return;
       const secondsPerBeat = secondsPerBeatRef.current;
       const detectedAtBeat = (event.t - startAudioTime) / secondsPerBeat;
       const nearest = nearestExpected(activePlan, event.t);
@@ -443,12 +467,14 @@ export function useTimedChordPracticeSession(
 
   return {
     status,
+    phase,
     running: status === "running",
     plan,
     attempts,
     strumMarkers,
     summary,
     playheadBeat,
+    countInRemainingBeats,
     currentIndex,
     error,
     start,
