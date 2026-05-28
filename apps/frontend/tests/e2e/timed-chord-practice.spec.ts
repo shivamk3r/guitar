@@ -10,6 +10,15 @@ test.describe("timed chord practice", () => {
     await expect(page.getByLabel("Scrolling beat timeline")).toBeVisible();
     await expect(page.getByText(/Selected:/)).toBeVisible();
 
+    const timelineBox = await page.getByLabel("Scrolling beat timeline").boundingBox();
+    const firstChordBox = await page.getByText("First chord").boundingBox();
+    const rollingScoreBox = await page.getByText("rolling score").boundingBox();
+    expect(timelineBox).not.toBeNull();
+    expect(firstChordBox).not.toBeNull();
+    expect(rollingScoreBox).not.toBeNull();
+    expect(timelineBox!.y + timelineBox!.height).toBeLessThan(firstChordBox!.y);
+    expect(timelineBox!.y + timelineBox!.height).toBeLessThan(rollingScoreBox!.y);
+
     await page.getByLabel("BPM").fill("84");
     await page.getByLabel("Beats").selectOption("2");
     await page.getByLabel("Order").selectOption("reverse");

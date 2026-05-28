@@ -209,7 +209,19 @@ export function TimedChordPracticePage() {
         </div>
       ) : (
         <>
-          <div className="grid lg:grid-cols-[minmax(260px,0.8fr)_minmax(0,1.2fr)] gap-6 mb-6">
+          <BeatTimeline
+            bpm={bpm}
+            beatsPerChord={beatsPerChord}
+            plan={session.plan.length > 0 ? session.plan : previewPlan}
+            attempts={session.attempts}
+            strumMarkers={session.strumMarkers}
+            timelineBeat={session.timelineBeat}
+            running={session.running}
+            sessionLength={sessionLength}
+            countInBeats={settings.timedPracticeCountInBeats}
+          />
+
+          <div className="grid lg:grid-cols-[minmax(260px,0.8fr)_minmax(0,1.2fr)] gap-6 mt-6 mb-6">
             <div className="bg-panel rounded-lg p-6 border border-white/5 flex flex-col items-center">
               <div className="text-sm text-muted mb-1">
                 {session.phase === "count-in"
@@ -268,19 +280,7 @@ export function TimedChordPracticePage() {
             </div>
           </div>
 
-          <BeatTimeline
-            bpm={bpm}
-            beatsPerChord={beatsPerChord}
-            plan={session.plan.length > 0 ? session.plan : previewPlan}
-            attempts={session.attempts}
-            strumMarkers={session.strumMarkers}
-            timelineBeat={session.timelineBeat}
-            running={session.running}
-            sessionLength={sessionLength}
-            countInBeats={settings.timedPracticeCountInBeats}
-          />
-
-          <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-6 mt-6">
+          <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-6">
             <TraceTable attempts={session.attempts} />
             {session.summary ? (
               <SummaryPanel summary={session.summary} />
