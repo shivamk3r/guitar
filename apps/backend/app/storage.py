@@ -47,6 +47,10 @@ class ObjectStorage:
         )
         return object_key, size_bytes
 
+    def get_recording(self, object_key: str) -> bytes:
+        response = self.client.get_object(Bucket=self.bucket, Key=object_key)
+        return response["Body"].read()
+
 
 def get_object_storage() -> ObjectStorage:
     return ObjectStorage()

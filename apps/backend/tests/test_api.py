@@ -18,6 +18,7 @@ class FakeStorage:
 
     def __init__(self) -> None:
         self.saved: list[tuple[str, bytes, str]] = []
+        self.objects: dict[str, bytes] = {}
 
     def put_recording(
         self,
@@ -30,7 +31,11 @@ class FakeStorage:
         content = file_obj.read()
         key = f"learners/{learner_id}/sessions/{session_id}/recordings/{recording_id}.webm"
         self.saved.append((key, content, content_type))
+        self.objects[key] = content
         return key, len(content)
+
+    def get_recording(self, object_key: str) -> bytes:
+        return self.objects[object_key]
 
 
 class FakeQueue:
@@ -123,3 +128,84 @@ def test_recording_upload_requires_consent(tmp_path: Path) -> None:
 
     assert response.status_code == 403
     assert queue.messages == []
+
+
+def test_history_includes_unrecorded_session_metadata(tmp_path: Path) -> None:
+    client, _storage, _queue = build_client(tmp_path)
+
+    learner = client.post("/v1/learners", json={"anonymous_id": "anonymous-history"}).json()
+    session_response = client.post(
+        "/v1/sessions",
+        json={
+            "learner_id": learner["id"],
+            "activity_type": "chord_check",
+            "client_metadata": {"chordId": "G", "chordName": "G"},
+        },
+    )
+    assert session_response.status_code == 201
+    session_id = session_response.json()["id"]
+
+    close_response = client.patch(
+        f"/v1/sessions/{session_id}",
+        json={
+            "client_metadata": {
+                "completionStatus": "completed",
+                "scoreSummary": {"averageScore": 8.25, "attempts": 2},
+                "attempts": [
+                    {"detectedChordId": "G", "score": 9},
+                    {"detectedChordId": "G", "score": 7.5},
+                ],
+            },
+        },
+    )
+    assert close_response.status_code == 200
+
+    history_response = client.get(f"/v1/learners/{learner['id']}/history")
+    assert history_response.status_code == 200
+    history = history_response.json()
+    assert len(history) == 1
+    assert history[0]["id"] == session_id
+    assert history[0]["completion_status"] == "completed"
+    assert history[0]["duration_seconds"] is not None
+    assert history[0]["score"] == 8.25
+    assert history[0]["result_summary"] == "8.2/10 average across 2 attempts"
+    assert history[0]["recording_available"] is False
+    assert history[0]["recordings"] == []
+    assert history[0]["client_metadata"]["chordId"] == "G"
+    assert history[0]["client_metadata"]["attempts"][0]["score"] == 9
+
+    detail_response = client.get(f"/v1/sessions/{session_id}")
+    assert detail_response.status_code == 200
+    assert detail_response.json()["client_metadata"]["scoreSummary"]["attempts"] == 2
+
+
+def test_recording_media_is_replayable_for_saved_recording(tmp_path: Path) -> None:
+    client, storage, _queue = build_client(tmp_path)
+
+    learner = client.post("/v1/learners", json={"anonymous_id": "anonymous-playback"}).json()
+    client.post(
+        "/v1/consents/recording",
+        json={"learner_id": learner["id"], "granted": True, "source": "settings"},
+    )
+    session = client.post(
+        "/v1/sessions",
+        json={"learner_id": learner["id"], "activity_type": "practice_drill"},
+    ).json()
+
+    upload_response = client.post(
+        f"/v1/sessions/{session['id']}/recordings",
+        files={"file": ("clip.webm", b"playable-audio", "audio/webm")},
+    )
+    assert upload_response.status_code == 201
+    recording_id = upload_response.json()["id"]
+
+    history_response = client.get(f"/v1/learners/{learner['id']}/history")
+    assert history_response.status_code == 200
+    assert history_response.json()[0]["recording_available"] is True
+    assert history_response.json()[0]["recordings"][0]["id"] == recording_id
+
+    media_response = client.get(f"/v1/recordings/{recording_id}/media")
+    assert media_response.status_code == 200
+    assert media_response.content == b"playable-audio"
+    assert media_response.headers["content-type"] == "audio/webm"
+    assert storage.saved[0][1] == b"playable-audio"

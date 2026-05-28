@@ -44,6 +44,7 @@ class SessionCreate(BaseModel):
 
 class SessionClose(BaseModel):
     ended_at: datetime | None = None
+    client_metadata: dict = Field(default_factory=dict)
 
 
 class SessionOut(BaseModel):
@@ -69,6 +70,26 @@ class RecordingOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class RecordingSummaryOut(BaseModel):
+    id: str
+    session_id: str
+    content_type: str
+    size_bytes: int
+    captured_at: datetime
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SessionHistoryOut(SessionOut):
+    duration_seconds: int | None
+    completion_status: str
+    score: float | None
+    result_summary: str | None
+    recording_available: bool
+    recordings: list[RecordingSummaryOut]
 
 
 class ProgressOut(BaseModel):

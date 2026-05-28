@@ -143,8 +143,16 @@ export function useTimedChordPracticeSession(
     pendingCapturesRef.current.clear();
     metronomeRef.current?.stop();
     metronomeRef.current = null;
+    const finalAttempts = attemptsRef.current;
+    const finalSummary = summarizeTimedPractice(finalAttempts);
     try {
-      await recordingRef.current?.stop();
+      await recordingRef.current?.stop(
+        buildTimedPracticeSessionMetadata({
+          attempts: finalAttempts,
+          config,
+          summary: finalSummary,
+        }),
+      );
     } catch (err) {
       console.error("session recording upload failed", err);
     } finally {
@@ -152,8 +160,6 @@ export function useTimedChordPracticeSession(
     }
     await getEngine().stop();
 
-    const finalAttempts = attemptsRef.current;
-    const finalSummary = summarizeTimedPractice(finalAttempts);
     setSummary(finalSummary);
     setStatus("ended");
     setPhase("ended");
@@ -175,7 +181,7 @@ export function useTimedChordPracticeSession(
         events: finalAttempts.length,
       }).catch((err) => console.error("save timed practice session failed", err));
     }
-  }, [clearTimers, config.bpm, config.chords, saveSession]);
+  }, [clearTimers, config, saveSession]);
 
   const createMiss = useCallback(
     (expected: ActiveExpected) => {
@@ -478,6 +484,31 @@ export function useTimedChordPracticeSession(
     error,
     start,
     stop,
+  };
+}
+
+function buildTimedPracticeSessionMetadata(input: {
+  attempts: readonly TimedPracticeAttempt[];
+  config: TimedChordPracticeConfig;
+  summary: TimedPracticeSummary;
+}): Record<string, unknown> {
+  return {
+    completionStatus: input.attempts.length > 0 ? "completed" : "stopped",
+    resultSummary:
+      input.attempts.length === 0
+        ? "No attempts scored"
+        : `${input.summary.averageScore.toFixed(1)}/10 average across ${input.attempts.length} attempts`,
+    score: input.summary.averageScore,
+    scoreSummary: input.summary,
+    practiceMode: "timed_chord_practice",
+    bpm: input.config.bpm,
+    beatsPerChord: input.config.beatsPerChord,
+    countInBeats: input.config.countInBeats,
+    order: input.config.order,
+    sessionLength: input.config.sessionLength,
+    chords: input.config.chords.map((chord) => chord.id),
+    chordNames: input.config.chords.map((chord) => chord.name),
+    attempts: input.attempts,
   };
 }
 

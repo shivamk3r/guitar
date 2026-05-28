@@ -27,7 +27,8 @@ flowchart LR
   UI -->|"consent and session state"| IndexedDB
   UI -->|"record after explicit consent"| Recorder
   Recorder -->|"POST /v1/sessions/{id}/recordings"| API
-  UI -->|"learners, consent, sessions, progress"| API
+  UI -->|"learners, consent, sessions, history, progress"| API
+  API -->|"recording playback for consented audio"| UI
 
   API --> Models
   Models --> Postgres

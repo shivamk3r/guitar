@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Metronome } from "../metronome";
 import { usePractice } from "../practice-store";
-import { scoreEvent } from "../scoring";
+import { type ScoredEvent, scoreEvent } from "../scoring";
 
 type Stroke = "D" | "U" | "-";
 
@@ -32,6 +32,15 @@ const PATTERNS: Pattern[] = [
 
 const TIMING_WINDOW_MS = 300;
 
+interface StrummingAttemptMetadata {
+  atIso: string;
+  expectedStroke: Stroke;
+  beat: number;
+  timingDeltaMs: number;
+  bpm: number;
+  score: ScoredEvent;
+}
+
 export function StrummingDrillPage() {
   const [patternId, setPatternId] = useState(PATTERNS[0]!.id);
   const [bpm, setBpm] = useState(80);
@@ -45,6 +54,7 @@ export function StrummingDrillPage() {
   const [error, setError] = useState<string | null>(null);
   const metronomeRef = useRef<Metronome | null>(null);
   const recordingRef = useRef<ActiveRecordedSession | null>(null);
+  const attemptsRef = useRef<StrummingAttemptMetadata[]>([]);
   const settings = useSettings();
   const recordEvent = usePractice((s) => s.recordEvent);
   const patternRef = useRef(pattern);
@@ -60,6 +70,7 @@ export function StrummingDrillPage() {
       const ctx = engine.ctx;
       if (!ctx) throw new Error("no audio context");
       usePractice.getState().reset();
+      attemptsRef.current = [];
       const metronome = new Metronome({
         bpm: bpm * 2, // Eighth notes
         audible: settings.metronomeAudible,
@@ -74,7 +85,13 @@ export function StrummingDrillPage() {
         activityType: "practice_drill",
         settings,
         updateSettings: settings.update,
-        metadata: { bpm, patternId: pattern.id },
+        metadata: {
+          practiceMode: "strumming_drill",
+          bpm,
+          patternId: pattern.id,
+          patternName: pattern.name,
+          strokes: pattern.strokes,
+        },
       }).catch((err) => {
         console.error("session recording failed", err);
         return null;
@@ -91,7 +108,13 @@ export function StrummingDrillPage() {
     metronomeRef.current?.stop();
     metronomeRef.current = null;
     try {
-      await recordingRef.current?.stop();
+      await recordingRef.current?.stop(
+        buildStrummingSessionMetadata({
+          attempts: attemptsRef.current,
+          bpm,
+          pattern,
+        }),
+      );
     } catch (err) {
       console.error("session recording upload failed", err);
     } finally {
@@ -132,6 +155,17 @@ export function StrummingDrillPage() {
         score: scored,
         bpm,
       });
+      attemptsRef.current = [
+        ...attemptsRef.current,
+        {
+          atIso: new Date().toISOString(),
+          expectedStroke: expected,
+          beat: beatInfo.beat,
+          timingDeltaMs: deltaMs,
+          bpm,
+          score: scored,
+        },
+      ];
     });
     return () => unsub();
   }, [running, bpm, recordEvent]);
@@ -227,4 +261,38 @@ export function StrummingDrillPage() {
       </div>
     </section>
   );
+}
+
+function buildStrummingSessionMetadata(input: {
+  attempts: readonly StrummingAttemptMetadata[];
+  bpm: number;
+  pattern: Pattern;
+}): Record<string, unknown> {
+  const averageScore =
+    input.attempts.length === 0
+      ? null
+      : input.attempts.reduce((total, attempt) => total + attempt.score.score, 0) /
+        input.attempts.length;
+  return {
+    completionStatus: input.attempts.length > 0 ? "completed" : "stopped",
+    resultSummary:
+      averageScore == null
+        ? "No strums scored"
+        : `${averageScore.toFixed(1)}/10 average across ${input.attempts.length} strums`,
+    score: averageScore,
+    scoreSummary: {
+      attempts: input.attempts.length,
+      averageScore,
+      bestScore:
+        input.attempts.length === 0
+          ? null
+          : Math.max(...input.attempts.map((attempt) => attempt.score.score)),
+    },
+    practiceMode: "strumming_drill",
+    bpm: input.bpm,
+    patternId: input.pattern.id,
+    patternName: input.pattern.name,
+    strokes: input.pattern.strokes,
+    attempts: input.attempts,
+  };
 }

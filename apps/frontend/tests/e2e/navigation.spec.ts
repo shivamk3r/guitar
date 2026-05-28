@@ -15,7 +15,12 @@ test.describe("navigation", () => {
     await expect(page.getByRole("heading", { name: "Practice" })).toBeVisible();
     await page.getByRole("link", { name: "Learn" }).click();
     await expect(page.getByRole("heading", { name: "Learn" })).toBeVisible();
-    await page.getByRole("link", { name: "Tuner" }).click();
+    await page.getByRole("link", { name: "History" }).click();
+    await expect(page.getByRole("heading", { name: "History" })).toBeVisible();
+    await page
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("link", { name: "Tuner" })
+      .click();
     await expect(page.getByRole("heading", { name: "Tuner" })).toBeVisible();
   });
 

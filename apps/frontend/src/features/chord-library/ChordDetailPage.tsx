@@ -1,8 +1,8 @@
 import { classifyStrings, expectedRingsMask, matchChord } from "@/audio/chord-detection";
 import { type ActiveRecordedSession, startRecordedSession } from "@/audio/sessionRecording";
 import { ensureEngineStarted, getEngine, useEngineState } from "@/audio/useAudioEngine";
-import { getChord, playedNotes } from "@/data/chords";
-import { scoreEvent } from "@/features/practice/scoring";
+import { type ChordDef, getChord, playedNotes } from "@/data/chords";
+import { type ScoredEvent, type StringClass, scoreEvent } from "@/features/practice/scoring";
 import { useProgress } from "@/storage/progress-store";
 import { useSettings } from "@/storage/settings-store";
 import { AudioInputSelect } from "@/ui/AudioInputSelect";
@@ -16,6 +16,16 @@ import { useChordCheck } from "./chord-check-store";
 import { playChordReference } from "./reference-audio";
 
 const CAPTURE_MS = 400;
+
+interface ChordCheckAttemptMetadata {
+  atIso: string;
+  expectedChordId: string;
+  detectedChordId: string | null;
+  detectedChordName: string | null;
+  similarity: number;
+  score: ScoredEvent;
+  stringStates: StringClass[];
+}
 
 export function ChordDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -45,6 +55,7 @@ function ChordDetailInner({ chordId }: { chordId: string }) {
   const recordingRef = useRef<ActiveRecordedSession | null>(null);
   const capturingRef = useRef(false);
   const chromaBuffer = useRef<Float32Array[]>([]);
+  const attemptsRef = useRef<ChordCheckAttemptMetadata[]>([]);
 
   useEffect(() => {
     setExpected(chord);
@@ -95,6 +106,18 @@ function ChordDetailInner({ chordId }: { chordId: string }) {
           stringStates,
           scored,
         });
+        attemptsRef.current = [
+          ...attemptsRef.current,
+          {
+            atIso: new Date().toISOString(),
+            expectedChordId: chord.id,
+            detectedChordId: match.chord?.id ?? null,
+            detectedChordName: match.chord?.name ?? null,
+            similarity: match.similarity,
+            score: scored,
+            stringStates,
+          },
+        ];
         recordChordCheck(chord.id, scored.score).catch((err) =>
           console.error("record chord check failed", err),
         );
@@ -112,6 +135,7 @@ function ChordDetailInner({ chordId }: { chordId: string }) {
 
   async function handleStartCheck() {
     setError(null);
+    attemptsRef.current = [];
     try {
       const engine = await ensureEngineStarted();
       setState("listening");
@@ -120,7 +144,7 @@ function ChordDetailInner({ chordId }: { chordId: string }) {
         activityType: "chord_check",
         settings,
         updateSettings: settings.update,
-        metadata: { chordId: chord.id },
+        metadata: { chordId: chord.id, chordName: chord.name },
       }).catch((err) => {
         console.error("session recording failed", err);
         return null;
@@ -133,7 +157,7 @@ function ChordDetailInner({ chordId }: { chordId: string }) {
 
   async function handleStop() {
     try {
-      await recordingRef.current?.stop();
+      await recordingRef.current?.stop(buildChordCheckSessionMetadata(chord, attemptsRef.current));
     } catch (err) {
       console.error("session recording upload failed", err);
     } finally {
@@ -256,6 +280,35 @@ function ChordDetailInner({ chordId }: { chordId: string }) {
       </div>
     </section>
   );
+}
+
+function buildChordCheckSessionMetadata(
+  chord: ChordDef,
+  attempts: readonly ChordCheckAttemptMetadata[],
+): Record<string, unknown> {
+  const averageScore =
+    attempts.length === 0
+      ? null
+      : attempts.reduce((total, attempt) => total + attempt.score.score, 0) / attempts.length;
+  const lastScore = attempts.at(-1)?.score.score ?? null;
+  return {
+    completionStatus: attempts.length > 0 ? "completed" : "stopped",
+    resultSummary:
+      averageScore == null
+        ? "No attempts scored"
+        : `${averageScore.toFixed(1)}/10 average across ${attempts.length} attempts`,
+    score: averageScore,
+    scoreSummary: {
+      attempts: attempts.length,
+      averageScore,
+      lastScore,
+      bestScore:
+        attempts.length === 0 ? null : Math.max(...attempts.map((attempt) => attempt.score.score)),
+    },
+    chordId: chord.id,
+    chordName: chord.name,
+    attempts,
+  };
 }
 
 function Bar({ label, value }: { label: string; value: number }) {
