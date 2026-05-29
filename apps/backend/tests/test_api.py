@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app import models
 from app.api import router
 from app.database import Base, get_db
 from app.queue import get_analysis_queue
@@ -47,7 +48,9 @@ class FakeQueue:
         self.messages.append((job_id, recording_id))
 
 
-def build_client(tmp_path: Path) -> tuple[TestClient, FakeStorage, FakeQueue]:
+def build_client(
+    tmp_path: Path,
+) -> tuple[TestClient, FakeStorage, FakeQueue, sessionmaker[Session]]:
     engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'api.db'}")
     Base.metadata.create_all(bind=engine)
     session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
@@ -66,11 +69,11 @@ def build_client(tmp_path: Path) -> tuple[TestClient, FakeStorage, FakeQueue]:
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_object_storage] = lambda: storage
     app.dependency_overrides[get_analysis_queue] = lambda: queue
-    return TestClient(app), storage, queue
+    return TestClient(app), storage, queue, session_local
 
 
 def test_session_recording_upload_enqueues_analysis(tmp_path: Path) -> None:
-    client, storage, queue = build_client(tmp_path)
+    client, storage, queue, _session_local = build_client(tmp_path)
 
     learner_response = client.post("/v1/learners", json={"anonymous_id": "anonymous-test-learner"})
     assert learner_response.status_code == 201
@@ -114,7 +117,7 @@ def test_session_recording_upload_enqueues_analysis(tmp_path: Path) -> None:
 
 
 def test_recording_upload_requires_consent(tmp_path: Path) -> None:
-    client, _storage, queue = build_client(tmp_path)
+    client, _storage, queue, _session_local = build_client(tmp_path)
 
     learner = client.post("/v1/learners", json={"anonymous_id": "anonymous-no-consent"}).json()
     session = client.post(
@@ -132,7 +135,7 @@ def test_recording_upload_requires_consent(tmp_path: Path) -> None:
 
 
 def test_history_includes_unrecorded_session_metadata(tmp_path: Path) -> None:
-    client, _storage, _queue = build_client(tmp_path)
+    client, _storage, _queue, _session_local = build_client(tmp_path)
 
     learner = client.post("/v1/learners", json={"anonymous_id": "anonymous-history"}).json()
     session_response = client.post(
@@ -181,7 +184,7 @@ def test_history_includes_unrecorded_session_metadata(tmp_path: Path) -> None:
 
 
 def test_recording_media_is_replayable_for_saved_recording(tmp_path: Path) -> None:
-    client, storage, _queue = build_client(tmp_path)
+    client, storage, _queue, _session_local = build_client(tmp_path)
 
     learner = client.post("/v1/learners", json={"anonymous_id": "anonymous-playback"}).json()
     client.post(
@@ -211,3 +214,99 @@ def test_recording_media_is_replayable_for_saved_recording(tmp_path: Path) -> No
     assert media_response.headers["content-type"] == "audio/wav"
     assert storage.saved[0][1] == b"playable-audio"
     assert storage.saved[0][0].endswith(".wav")
+
+
+def test_recording_analysis_endpoint_exposes_structured_backend_feedback(tmp_path: Path) -> None:
+    client, _storage, queue, session_local = build_client(tmp_path)
+
+    learner = client.post("/v1/learners", json={"anonymous_id": "anonymous-analysis"}).json()
+    client.post(
+        "/v1/consents/recording",
+        json={"learner_id": learner["id"], "granted": True, "source": "settings"},
+    )
+    session = client.post(
+        "/v1/sessions",
+        json={
+            "learner_id": learner["id"],
+            "activity_type": "chord_check",
+            "client_metadata": {"chordId": "G", "chordName": "G"},
+        },
+    ).json()
+
+    upload_response = client.post(
+        f"/v1/sessions/{session['id']}/recordings",
+        files={"file": ("clip.wav", b"analysis-audio", "audio/wav")},
+    )
+    assert upload_response.status_code == 201
+    recording_id = upload_response.json()["id"]
+    job_id, queued_recording_id = queue.messages[0]
+    assert queued_recording_id == recording_id
+
+    with session_local() as db:
+        job = db.get(models.AnalysisJob, job_id)
+        assert job is not None
+        job.status = "completed"
+        job.completed_at = models.utcnow()
+        db.add(
+            models.AnalysisResult(
+                job_id=job_id,
+                recording_id=recording_id,
+                guidance="Chord check accepted for G.",
+                metrics={
+                    "placeholder": False,
+                    "activity": "chord_check",
+                    "durationSec": 2.5,
+                    "detector": {
+                        "detector": "solitito",
+                        "modelId": "greblus/solitito-ai",
+                        "modelRevision": "revision-1",
+                        "modelFilename": "model.onnx",
+                    },
+                    "expectedChordId": "G",
+                    "predictedChordId": "G",
+                    "confidence": 0.72,
+                    "verifierStatus": "accepted",
+                    "acceptedChordId": "G",
+                    "bestAlternativeChordId": "C",
+                    "expectedSimilarity": 0.72,
+                    "alternativeSimilarity": 0.18,
+                    "verifierMargin": 0.54,
+                    "capture": {
+                        "hasSignal": True,
+                        "rawRoot": "G",
+                        "rawQuality": "",
+                        "rootConfidence": 0.9,
+                        "qualityConfidence": 0.8,
+                        "chromaFrames": 64,
+                        "chromaFramesUsed": 12,
+                        "captureStartSec": 0.0,
+                        "captureEndSec": 2.5,
+                        "topK": [
+                            {"chordId": "G", "confidence": 0.72, "root": "G", "quality": ""},
+                            {"chordId": "C", "confidence": 0.18, "root": "C", "quality": ""},
+                        ],
+                    },
+                },
+            )
+        )
+        db.commit()
+
+    history_response = client.get(f"/v1/learners/{learner['id']}/history")
+    assert history_response.status_code == 200
+    analysis_summary = history_response.json()[0]["recordings"][0]["analysis"]
+    assert analysis_summary["status"] == "completed"
+    assert analysis_summary["result"] == "accepted"
+    assert analysis_summary["target_chord_id"] == "G"
+    assert analysis_summary["predicted_chord_id"] == "G"
+    assert analysis_summary["confidence"] == 0.72
+
+    analysis_response = client.get(f"/v1/recordings/{recording_id}/analysis")
+    assert analysis_response.status_code == 200
+    analysis = analysis_response.json()
+    assert analysis["status"] == "completed"
+    assert analysis["detector"]["name"] == "solitito"
+    assert analysis["target"]["chord_id"] == "G"
+    assert analysis["prediction"]["verifier_status"] == "accepted"
+    assert analysis["prediction"]["best_alternative_chord_id"] == "C"
+    assert analysis["prediction"]["top_predictions"][0]["chord_id"] == "G"
+    assert analysis["capture"]["raw_root"] == "G"

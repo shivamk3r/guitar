@@ -72,6 +72,16 @@ class RecordingOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class RecordingAnalysisSummaryOut(BaseModel):
+    status: str
+    result: str | None = None
+    guidance: str | None = None
+    target_chord_id: str | None = None
+    predicted_chord_id: str | None = None
+    confidence: float | None = None
+    completed_at: datetime | None = None
+
+
 class RecordingSummaryOut(BaseModel):
     id: str
     session_id: str
@@ -79,8 +89,65 @@ class RecordingSummaryOut(BaseModel):
     size_bytes: int
     captured_at: datetime
     created_at: datetime
+    analysis: RecordingAnalysisSummaryOut
 
     model_config = {"from_attributes": True}
+
+
+class AnalysisDetectorOut(BaseModel):
+    name: str
+    model_id: str | None = None
+    model_revision: str | None = None
+    model_filename: str | None = None
+
+
+class AnalysisTargetOut(BaseModel):
+    chord_id: str | None = None
+
+
+class AnalysisTopPredictionOut(BaseModel):
+    chord_id: str | None = None
+    confidence: float
+    root: str | None = None
+    quality: str | None = None
+
+
+class AnalysisPredictionOut(BaseModel):
+    chord_id: str | None = None
+    verifier_status: str | None = None
+    confidence: float | None = None
+    expected_similarity: float | None = None
+    best_alternative_chord_id: str | None = None
+    alternative_similarity: float | None = None
+    margin: float | None = None
+    top_predictions: list[AnalysisTopPredictionOut] = Field(default_factory=list)
+
+
+class AnalysisCaptureOut(BaseModel):
+    has_signal: bool | None = None
+    duration_sec: float | None = None
+    raw_root: str | None = None
+    raw_quality: str | None = None
+    root_confidence: float | None = None
+    quality_confidence: float | None = None
+    frame_count: int | None = None
+    frames_used: int | None = None
+    capture_start_sec: float | None = None
+    capture_end_sec: float | None = None
+
+
+class RecordingAnalysisOut(BaseModel):
+    status: str
+    recording_id: str
+    activity_type: str
+    created_at: datetime | None = None
+    completed_at: datetime | None = None
+    detector: AnalysisDetectorOut | None = None
+    target: AnalysisTargetOut
+    prediction: AnalysisPredictionOut | None = None
+    capture: AnalysisCaptureOut | None = None
+    guidance: str | None = None
+    error: str | None = None
 
 
 class SessionHistoryOut(SessionOut):

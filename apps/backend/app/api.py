@@ -8,12 +8,20 @@ from . import models
 from .database import get_db
 from .queue import AnalysisQueue, get_analysis_queue
 from .schemas import (
+    AnalysisCaptureOut,
+    AnalysisDetectorOut,
+    AnalysisPredictionOut,
+    AnalysisTargetOut,
+    AnalysisTopPredictionOut,
     LearnerCreate,
     LearnerOut,
     ProgressOut,
+    RecordingAnalysisOut,
+    RecordingAnalysisSummaryOut,
     RecordingConsentCreate,
     RecordingConsentOut,
     RecordingOut,
+    RecordingSummaryOut,
     SessionHistoryOut,
     SessionClose,
     SessionCreate,
@@ -181,6 +189,14 @@ def get_recording_media(
     )
 
 
+@router.get("/recordings/{recording_id}/analysis", response_model=RecordingAnalysisOut)
+def get_recording_analysis(recording_id: str, db: Session = Depends(get_db)) -> RecordingAnalysisOut:
+    recording = db.get(models.AudioRecording, recording_id)
+    if recording is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="recording not found")
+    return build_recording_analysis(recording)
+
+
 @router.get("/learners/{learner_id}/progress", response_model=ProgressOut)
 def get_progress(learner_id: str, db: Session = Depends(get_db)) -> ProgressOut:
     require_learner(db, learner_id)
@@ -234,7 +250,176 @@ def build_history_session(session: models.LearningSession) -> SessionHistoryOut:
         score=extract_score(metadata),
         result_summary=extract_result_summary(metadata),
         recording_available=len(session.recordings) > 0,
-        recordings=list(session.recordings),
+        recordings=[build_recording_summary(recording) for recording in session.recordings],
+    )
+
+
+def build_recording_summary(recording: models.AudioRecording) -> RecordingSummaryOut:
+    return RecordingSummaryOut(
+        id=recording.id,
+        session_id=recording.session_id,
+        content_type=recording.content_type,
+        size_bytes=recording.size_bytes,
+        captured_at=recording.captured_at,
+        created_at=recording.created_at,
+        analysis=build_analysis_summary(recording),
+    )
+
+
+def build_analysis_summary(recording: models.AudioRecording) -> RecordingAnalysisSummaryOut:
+    job = latest_analysis_job(recording)
+    if job is None:
+        return RecordingAnalysisSummaryOut(status="not_started")
+    if job.result is None:
+        return RecordingAnalysisSummaryOut(
+            status=job.status,
+            target_chord_id=session_chord_id(recording),
+            completed_at=job.completed_at,
+        )
+    metrics = job.result.metrics or {}
+    result = analysis_result_label(metrics)
+    return RecordingAnalysisSummaryOut(
+        status=job.status,
+        result=result,
+        guidance=job.result.guidance,
+        target_chord_id=string_value(metrics.get("expectedChordId")) or session_chord_id(recording),
+        predicted_chord_id=string_value(metrics.get("predictedChordId")),
+        confidence=float_value(metrics.get("confidence")),
+        completed_at=job.completed_at or job.result.created_at,
+    )
+
+
+def build_recording_analysis(recording: models.AudioRecording) -> RecordingAnalysisOut:
+    job = latest_analysis_job(recording)
+    target = AnalysisTargetOut(chord_id=session_chord_id(recording))
+    if job is None:
+        return RecordingAnalysisOut(
+            status="not_started",
+            recording_id=recording.id,
+            activity_type=recording.session.activity_type,
+            target=target,
+            guidance="Analysis has not been queued for this recording.",
+        )
+    if job.result is None:
+        return RecordingAnalysisOut(
+            status=job.status,
+            recording_id=recording.id,
+            activity_type=recording.session.activity_type,
+            completed_at=job.completed_at,
+            target=target,
+            guidance=analysis_status_guidance(job.status),
+            error=job.error,
+        )
+
+    metrics = job.result.metrics or {}
+    return RecordingAnalysisOut(
+        status=job.status,
+        recording_id=recording.id,
+        activity_type=recording.session.activity_type,
+        created_at=job.result.created_at,
+        completed_at=job.completed_at or job.result.created_at,
+        detector=analysis_detector(metrics),
+        target=AnalysisTargetOut(
+            chord_id=string_value(metrics.get("expectedChordId")) or session_chord_id(recording),
+        ),
+        prediction=analysis_prediction(metrics),
+        capture=analysis_capture(metrics),
+        guidance=job.result.guidance,
+        error=job.error,
+    )
+
+
+def latest_analysis_job(recording: models.AudioRecording) -> models.AnalysisJob | None:
+    if not recording.analysis_jobs:
+        return None
+    return max(recording.analysis_jobs, key=lambda job: job.queued_at)
+
+
+def session_chord_id(recording: models.AudioRecording) -> str | None:
+    metadata = recording.session.client_metadata or {}
+    return string_value(metadata.get("chordId"))
+
+
+def analysis_result_label(metrics: dict) -> str | None:
+    if metrics.get("analysisSkipped") is True:
+        return "skipped"
+    verifier_status = string_value(metrics.get("verifierStatus"))
+    if verifier_status:
+        return verifier_status
+    if metrics.get("placeholder") is True:
+        return "unavailable"
+    return None
+
+
+def analysis_status_guidance(job_status: str) -> str:
+    if job_status == "queued":
+        return "Analysis is queued."
+    if job_status == "running":
+        return "Analysis is running."
+    if job_status == "failed":
+        return "Analysis failed."
+    return "Analysis result is not available yet."
+
+
+def analysis_detector(metrics: dict) -> AnalysisDetectorOut | None:
+    detector = metrics.get("detector")
+    if not isinstance(detector, dict):
+        return None
+    name = string_value(detector.get("detector")) or "unknown"
+    return AnalysisDetectorOut(
+        name=name,
+        model_id=string_value(detector.get("modelId")),
+        model_revision=string_value(detector.get("modelRevision")),
+        model_filename=string_value(detector.get("modelFilename")),
+    )
+
+
+def analysis_prediction(metrics: dict) -> AnalysisPredictionOut:
+    capture = metrics.get("capture")
+    top_k = capture.get("topK") if isinstance(capture, dict) else None
+    top_predictions = []
+    if isinstance(top_k, list):
+        for item in top_k:
+            if not isinstance(item, dict):
+                continue
+            confidence = float_value(item.get("confidence"))
+            if confidence is None:
+                continue
+            top_predictions.append(
+                AnalysisTopPredictionOut(
+                    chord_id=string_value(item.get("chordId")),
+                    confidence=confidence,
+                    root=string_value(item.get("root")),
+                    quality=string_value(item.get("quality")),
+                )
+            )
+    return AnalysisPredictionOut(
+        chord_id=string_value(metrics.get("predictedChordId")),
+        verifier_status=string_value(metrics.get("verifierStatus")) or analysis_result_label(metrics),
+        confidence=float_value(metrics.get("confidence")),
+        expected_similarity=float_value(metrics.get("expectedSimilarity")),
+        best_alternative_chord_id=string_value(metrics.get("bestAlternativeChordId")),
+        alternative_similarity=float_value(metrics.get("alternativeSimilarity")),
+        margin=first_float_value(metrics.get("verifierMargin"), metrics.get("margin")),
+        top_predictions=top_predictions,
+    )
+
+
+def analysis_capture(metrics: dict) -> AnalysisCaptureOut:
+    capture = metrics.get("capture")
+    if not isinstance(capture, dict):
+        return AnalysisCaptureOut(duration_sec=float_value(metrics.get("durationSec")))
+    return AnalysisCaptureOut(
+        has_signal=bool_value(capture.get("hasSignal")),
+        duration_sec=float_value(metrics.get("durationSec")),
+        raw_root=string_value(capture.get("rawRoot")),
+        raw_quality=string_value(capture.get("rawQuality")),
+        root_confidence=float_value(capture.get("rootConfidence")),
+        quality_confidence=float_value(capture.get("qualityConfidence")),
+        frame_count=int_value(capture.get("chromaFrames")),
+        frames_used=int_value(capture.get("chromaFramesUsed")),
+        capture_start_sec=float_value(capture.get("captureStartSec")),
+        capture_end_sec=float_value(capture.get("captureEndSec")),
     )
 
 
@@ -291,6 +476,30 @@ def nested(metadata: dict, parent: str, child: str) -> object:
     if not isinstance(value, dict):
         return None
     return value.get(child)
+
+
+def string_value(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
+def float_value(value: object) -> float | None:
+    return float(value) if is_number(value) else None
+
+
+def first_float_value(*values: object) -> float | None:
+    for value in values:
+        parsed = float_value(value)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def int_value(value: object) -> int | None:
+    return int(value) if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def bool_value(value: object) -> bool | None:
+    return value if isinstance(value, bool) else None
 
 
 def is_number(value: object) -> bool:

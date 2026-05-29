@@ -1,6 +1,10 @@
 import {
+  type RecordingAnalysis,
+  type RecordingAnalysisSummary,
+  type RecordingSummary,
   type SessionHistoryItem,
   fetchLearnerHistory,
+  fetchRecordingAnalysis,
   fetchSessionDetail,
   recordingMediaUrl,
 } from "@/api/client";
@@ -338,12 +342,192 @@ function RecordingPanel({ session }: { session: SessionHistoryItem }) {
                   Download raw audio
                 </a>
               </div>
+              <RecordingAnalysisSummaryLine summary={recording.analysis} />
+              <RecordingAnalysisFeedback recording={recording} />
             </div>
           );
         })}
       </div>
     </div>
   );
+}
+
+function RecordingAnalysisSummaryLine({ summary }: { summary: RecordingAnalysisSummary }) {
+  const status = analysisStatusLabel(summary.status);
+  const result = analysisResultText(summary);
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+      <span className={clsx("rounded px-2 py-1", analysisStatusClass(summary))}>{status}</span>
+      <span className="text-muted">{result}</span>
+    </div>
+  );
+}
+
+function RecordingAnalysisFeedback({ recording }: { recording: RecordingSummary }) {
+  const [expanded, setExpanded] = useState(false);
+  const [analysis, setAnalysis] = useState<RecordingAnalysis | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const canFetch = recording.analysis.status !== "not_started";
+
+  const toggle = async () => {
+    const nextExpanded = !expanded;
+    setExpanded(nextExpanded);
+    if (!nextExpanded || analysis || loading || !canFetch) return;
+    setLoading(true);
+    setError(null);
+    try {
+      setAnalysis(await fetchRecordingAnalysis(recording.id));
+    } catch (err) {
+      console.error("recording analysis load failed", err);
+      setError(err instanceof Error ? err.message : "Could not load backend feedback.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!canFetch) return null;
+
+  return (
+    <div className="mt-3">
+      <Button variant="secondary" size="sm" onClick={toggle}>
+        {expanded ? "Hide backend feedback" : "View backend feedback"}
+      </Button>
+      {expanded && (
+        <div className="mt-3 border-t border-white/10 pt-3">
+          {loading && <div className="text-sm text-muted">Loading backend feedback...</div>}
+          {error && <div className="text-sm text-bad">{error}</div>}
+          {analysis && <RecordingAnalysisDetail analysis={analysis} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RecordingAnalysisDetail({ analysis }: { analysis: RecordingAnalysis }) {
+  const rows = analysisDetailRows(analysis);
+  const topPredictions = analysis.prediction?.top_predictions ?? [];
+  return (
+    <div className="space-y-3 text-sm">
+      <dl className="grid sm:grid-cols-2 gap-x-4 gap-y-2">
+        {rows.map((row) => (
+          <div key={row.label}>
+            <dt className="text-muted">{row.label}</dt>
+            <dd className="text-ink mt-0.5">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+      {topPredictions.length > 0 && (
+        <div>
+          <div className="text-muted mb-2">Top model estimates</div>
+          <ol className="space-y-1">
+            {topPredictions.slice(0, 5).map((item, index) => (
+              <li
+                key={`${item.chord_id ?? "unknown"}-${index}`}
+                className="flex items-center justify-between gap-3 text-xs"
+              >
+                <span>{item.chord_id ?? "Unknown"}</span>
+                <span className="tabular-nums">{percent(item.confidence)}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+      {analysis.guidance && <div className="text-muted">{analysis.guidance}</div>}
+    </div>
+  );
+}
+
+function analysisDetailRows(analysis: RecordingAnalysis): { label: string; value: string }[] {
+  const prediction = analysis.prediction;
+  const capture = analysis.capture;
+  const rows: { label: string; value: string }[] = [];
+  addAnalysisRow(
+    rows,
+    "Result",
+    analysisResultLabel(prediction?.verifier_status ?? analysis.status),
+  );
+  addAnalysisRow(rows, "Target", analysis.target.chord_id ?? undefined);
+  addAnalysisRow(rows, "Backend heard", prediction?.chord_id ?? undefined);
+  addAnalysisRow(rows, "Confidence", percentOrUndefined(prediction?.confidence));
+  addAnalysisRow(rows, "Expected match", percentOrUndefined(prediction?.expected_similarity));
+  addAnalysisRow(rows, "Closest alternative", prediction?.best_alternative_chord_id ?? undefined);
+  addAnalysisRow(rows, "Alternative match", percentOrUndefined(prediction?.alternative_similarity));
+  addAnalysisRow(rows, "Margin", percentOrUndefined(prediction?.margin));
+  addAnalysisRow(rows, "Model", analysis.detector?.name);
+  addAnalysisRow(rows, "Raw root", capture?.raw_root ?? undefined);
+  addAnalysisRow(rows, "Raw quality", rawQualityLabel(capture?.raw_quality));
+  addAnalysisRow(rows, "Frames used", numberOrUndefined(capture?.frames_used));
+  return rows;
+}
+
+function addAnalysisRow(
+  rows: { label: string; value: string }[],
+  label: string,
+  value: string | undefined,
+): void {
+  if (!value) return;
+  rows.push({ label, value });
+}
+
+function analysisResultText(summary: RecordingAnalysisSummary): string {
+  if (summary.status === "queued" || summary.status === "running")
+    return "Backend analysis pending";
+  if (summary.status === "failed") return "Backend analysis failed";
+  if (summary.result === "accepted") {
+    const chord = summary.target_chord_id ?? summary.predicted_chord_id;
+    return chord ? `Accepted ${chord}` : "Accepted";
+  }
+  if (summary.result === "rejected") {
+    const target = summary.target_chord_id ?? "target";
+    const predicted = summary.predicted_chord_id ?? "another chord";
+    return `Expected ${target}, heard ${predicted}`;
+  }
+  if (summary.result === "uncertain") return "Backend result inconclusive";
+  if (summary.result === "skipped") return summary.guidance ?? "Backend analysis skipped";
+  if (summary.result === "unavailable") return "Backend analysis unavailable";
+  return summary.guidance ?? "Backend analysis not available";
+}
+
+function analysisStatusLabel(status: string): string {
+  if (status === "queued") return "Queued";
+  if (status === "running") return "Analyzing";
+  if (status === "completed") return "Analyzed";
+  if (status === "failed") return "Failed";
+  return "Not analyzed";
+}
+
+function analysisStatusClass(summary: RecordingAnalysisSummary): string {
+  if (summary.status === "failed" || summary.result === "rejected") {
+    return "bg-bad/10 text-bad border border-bad/30";
+  }
+  if (summary.result === "accepted") return "bg-accent/10 text-accent border border-accent/30";
+  if (summary.status === "queued" || summary.status === "running") {
+    return "bg-accent/10 text-accent border border-accent/30";
+  }
+  return "bg-white/5 text-muted border border-white/10";
+}
+
+function analysisResultLabel(value: string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  return completionLabel(value);
+}
+
+function percentOrUndefined(value: number | null | undefined): string | undefined {
+  return value == null ? undefined : percent(value);
+}
+
+function percent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+function numberOrUndefined(value: number | null | undefined): string | undefined {
+  return value == null ? undefined : String(value);
+}
+
+function rawQualityLabel(value: string | null | undefined): string | undefined {
+  if (value == null) return undefined;
+  return value === "" ? "major" : value;
 }
 
 function recordingContentLabel(contentType: string): string {

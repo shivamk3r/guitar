@@ -21,6 +21,7 @@ export interface RecordingSummary {
   size_bytes: number;
   captured_at: string;
   created_at: string;
+  analysis: RecordingAnalysisSummary;
 }
 
 export interface SessionHistoryItem extends LearningSession {
@@ -30,6 +31,72 @@ export interface SessionHistoryItem extends LearningSession {
   result_summary: string | null;
   recording_available: boolean;
   recordings: RecordingSummary[];
+}
+
+export interface RecordingAnalysisSummary {
+  status: string;
+  result: string | null;
+  guidance: string | null;
+  target_chord_id: string | null;
+  predicted_chord_id: string | null;
+  confidence: number | null;
+  completed_at: string | null;
+}
+
+export interface RecordingAnalysis {
+  status: string;
+  recording_id: string;
+  activity_type: ActivityType;
+  created_at: string | null;
+  completed_at: string | null;
+  detector: AnalysisDetector | null;
+  target: AnalysisTarget;
+  prediction: AnalysisPrediction | null;
+  capture: AnalysisCapture | null;
+  guidance: string | null;
+  error: string | null;
+}
+
+export interface AnalysisDetector {
+  name: string;
+  model_id: string | null;
+  model_revision: string | null;
+  model_filename: string | null;
+}
+
+export interface AnalysisTarget {
+  chord_id: string | null;
+}
+
+export interface AnalysisPrediction {
+  chord_id: string | null;
+  verifier_status: string | null;
+  confidence: number | null;
+  expected_similarity: number | null;
+  best_alternative_chord_id: string | null;
+  alternative_similarity: number | null;
+  margin: number | null;
+  top_predictions: AnalysisTopPrediction[];
+}
+
+export interface AnalysisTopPrediction {
+  chord_id: string | null;
+  confidence: number;
+  root: string | null;
+  quality: string | null;
+}
+
+export interface AnalysisCapture {
+  has_signal: boolean | null;
+  duration_sec: number | null;
+  raw_root: string | null;
+  raw_quality: string | null;
+  root_confidence: number | null;
+  quality_confidence: number | null;
+  frame_count: number | null;
+  frames_used: number | null;
+  capture_start_sec: number | null;
+  capture_end_sec: number | null;
 }
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7654").replace(
@@ -116,6 +183,10 @@ export async function fetchLearnerHistory(learnerId: string): Promise<SessionHis
 
 export async function fetchSessionDetail(sessionId: string): Promise<SessionHistoryItem> {
   return getJson<SessionHistoryItem>(`/v1/sessions/${sessionId}`);
+}
+
+export async function fetchRecordingAnalysis(recordingId: string): Promise<RecordingAnalysis> {
+  return getJson<RecordingAnalysis>(`/v1/recordings/${recordingId}/analysis`);
 }
 
 export function recordingMediaUrl(recordingId: string): string {
