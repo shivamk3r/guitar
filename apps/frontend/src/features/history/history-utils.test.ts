@@ -1,7 +1,9 @@
-import type { SessionHistoryItem } from "@/api/client";
+import type { RecordingAnalysisSummary, SessionHistoryItem } from "@/api/client";
 import { describe, expect, it } from "vitest";
 import {
   activityLabel,
+  analysisResultText,
+  backendScoreRows,
   formatDuration,
   getAttempts,
   getConfigRows,
@@ -83,6 +85,36 @@ describe("history utilities", () => {
       { id: "one", label: "A", score: "9/10", detail: "heard A · hit · -24 ms" },
     ]);
   });
+
+  it("formats backend practice scores and falls back to count summaries", () => {
+    const score = {
+      value: 50,
+      label: "Building",
+      analysis_coverage: 1,
+      clarity: 0.625,
+      decisive_accuracy: 0.8,
+      accepted_rate: 0.5,
+      rejected_rate: 0.125,
+      uncertain_rate: 0.375,
+    };
+
+    expect(
+      analysisResultText(
+        analysisSummary({
+          score,
+        }),
+      ),
+    ).toBe("Backend score 50/100 · 48 confirmed correct, 12 wrong, 36 inconclusive");
+    expect(backendScoreRows(score)).toEqual([
+      { label: "Backend score", value: "50/100 · Building" },
+      { label: "Clarity", value: "63%" },
+      { label: "Decisive accuracy", value: "80%" },
+    ]);
+
+    expect(analysisResultText(analysisSummary({ score: null }))).toBe(
+      "Backend analyzed 96/96 attempts · 48 accepted, 12 rejected, 36 uncertain",
+    );
+  });
 });
 
 function historyItem(patch: Partial<SessionHistoryItem>): SessionHistoryItem {
@@ -99,6 +131,25 @@ function historyItem(patch: Partial<SessionHistoryItem>): SessionHistoryItem {
     result_summary: null,
     recording_available: false,
     recordings: [],
+    ...patch,
+  };
+}
+
+function analysisSummary(patch: Partial<RecordingAnalysisSummary>): RecordingAnalysisSummary {
+  return {
+    status: "completed",
+    result: "analyzed",
+    guidance: null,
+    score: null,
+    target_chord_id: null,
+    predicted_chord_id: null,
+    confidence: null,
+    attempt_count: 96,
+    analyzed_attempt_count: 96,
+    accepted_count: 48,
+    rejected_count: 12,
+    uncertain_count: 36,
+    completed_at: null,
     ...patch,
   };
 }

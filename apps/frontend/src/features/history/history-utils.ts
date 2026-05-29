@@ -1,4 +1,9 @@
-import type { ActivityType, SessionHistoryItem } from "@/api/client";
+import type {
+  ActivityType,
+  PracticeScore,
+  RecordingAnalysisSummary,
+  SessionHistoryItem,
+} from "@/api/client";
 
 export interface HistoryRow {
   label: string;
@@ -57,6 +62,49 @@ export function timelineResult(session: SessionHistoryItem): string {
   const total = numberValue(tuning?.totalStringCount);
   if (tuned != null && total != null) return `${tuned}/${total} tuned`;
   return session.result_summary ?? "No score yet";
+}
+
+export function analysisResultText(summary: RecordingAnalysisSummary): string {
+  if (summary.status === "queued" || summary.status === "running")
+    return "Backend analysis pending";
+  if (summary.status === "failed") return "Backend analysis failed";
+  if (summary.result === "analyzed") {
+    if (summary.attempt_count == null) return "Backend practice analysis complete";
+    const analyzed = summary.analyzed_attempt_count ?? summary.attempt_count;
+    const accepted = summary.accepted_count ?? 0;
+    const rejected = summary.rejected_count ?? 0;
+    const uncertain = summary.uncertain_count ?? 0;
+    if (summary.score) {
+      return `Backend score ${Math.round(summary.score.value)}/100 · ${accepted} confirmed correct, ${rejected} wrong, ${uncertain} inconclusive`;
+    }
+    return `Backend analyzed ${analyzed}/${summary.attempt_count} attempts · ${accepted} accepted, ${rejected} rejected, ${uncertain} uncertain`;
+  }
+  if (summary.result === "accepted") {
+    const chord = summary.target_chord_id ?? summary.predicted_chord_id;
+    return chord ? `Accepted ${chord}` : "Accepted";
+  }
+  if (summary.result === "rejected") {
+    const target = summary.target_chord_id ?? "target";
+    const predicted = summary.predicted_chord_id ?? "another chord";
+    return `Expected ${target}, heard ${predicted}`;
+  }
+  if (summary.result === "uncertain") return "Backend result inconclusive";
+  if (summary.result === "skipped") return summary.guidance ?? "Backend analysis skipped";
+  if (summary.result === "unavailable") return summary.guidance ?? "Backend analysis unavailable";
+  return summary.guidance ?? "Backend analysis not available";
+}
+
+export function backendScoreRows(score: PracticeScore | null | undefined): HistoryRow[] {
+  const rows: HistoryRow[] = [];
+  addRow(rows, "Backend score", backendScoreLabel(score));
+  addRow(rows, "Clarity", percentLabel(score?.clarity));
+  addRow(rows, "Decisive accuracy", percentLabel(score?.decisive_accuracy));
+  return rows;
+}
+
+export function backendScoreLabel(score: PracticeScore | null | undefined): string | undefined {
+  if (!score) return undefined;
+  return `${Math.round(score.value)}/100 · ${score.label}`;
 }
 
 export function getConfigRows(session: SessionHistoryItem): HistoryRow[] {

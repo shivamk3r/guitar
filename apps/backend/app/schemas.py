@@ -72,10 +72,22 @@ class RecordingOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PracticeScoreOut(BaseModel):
+    value: float
+    label: str
+    analysis_coverage: float | None = None
+    clarity: float | None = None
+    decisive_accuracy: float | None = None
+    accepted_rate: float | None = None
+    rejected_rate: float | None = None
+    uncertain_rate: float | None = None
+
+
 class RecordingAnalysisSummaryOut(BaseModel):
     status: str
     result: str | None = None
     guidance: str | None = None
+    score: PracticeScoreOut | None = None
     target_chord_id: str | None = None
     predicted_chord_id: str | None = None
     confidence: float | None = None
@@ -175,6 +187,7 @@ class PracticeAnalysisOut(BaseModel):
     rejected_count: int
     uncertain_count: int
     skipped_count: int
+    score: PracticeScoreOut | None = None
     average_confidence: float | None = None
     attempts: list[PracticeAttemptAnalysisOut] = Field(default_factory=list)
 

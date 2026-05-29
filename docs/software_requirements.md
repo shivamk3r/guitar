@@ -67,7 +67,7 @@ The product closes the loop between "I played something" and "what should I do n
 - **FR-H1** Provide a History page that lists tuning, chord-check, and practice sessions in chronological order.
 - **FR-H2** Show each activity's type, start time, duration, completion status, score or tuning result, and whether a recording is available.
 - **FR-H3** Let learners open activity details with saved configuration including tuning preset, chord targets, BPM, beats per chord, practice length, score breakdown, and attempts when available.
-- **FR-H4** Show backend recording-analysis status, detailed chord feedback, and per-attempt backend feedback for supported practice recordings when an analysis result is available.
+- **FR-H4** Show backend recording-analysis status, detailed chord feedback, learner-facing verified practice score, and per-attempt backend feedback for supported practice recordings when an analysis result is available.
 - **FR-H5** Save meaningful session metadata even when recording consent is disabled.
 - **FR-H6** Only save and replay raw audio when explicit recording consent is enabled.
 - **FR-H7** Use history as the durable foundation for later streaks, weak chord-transition detection, tuning consistency, practice frequency, and recommended drills.
@@ -103,7 +103,7 @@ Latest full target-aware + WCSR evals were generated 2026-05-29 10:11-10:15 IST:
 | Python DSP | `2026-05-29T04:42:13.909381Z` | `24601413f5c157c8` | 955 | 2502.5s | 14.2% | 13.2% | 37.7% | 30.7% | 9.7% | 9.3% | 0.7% | 11.0% | 69.4% |
 | Python Solitito | `2026-05-29T04:45:19.911341Z` | `397a440dd8aa9433` | 955 | 2502.5s | 72.4% | 74.7% | 82.8% | 78.5% | 53.2% | 57.4% | 0.2% | 4.0% | 44.1% |
 
-The browser and classical DSP baselines remain below the long-term **NFR-2** accuracy target. The Solitito backend detector is a significant async-analysis improvement and is now eligible for consented `chord_check` recordings and supported `practice_drill` chord attempts, but it is not the browser real-time path. The verifier intentionally trades recall for fewer confident wrong accepts: `accepted` is scored as correct for the target chord, `rejected` is scored as wrong using the best alternative, and `uncertain` avoids awarding or confidently penalizing a chord identity when evidence is ambiguous. WCSR is duration-weighted and helps compare against MIR literature, while verifier recall remains the learner-facing trust metric.
+The browser and classical DSP baselines remain below the long-term **NFR-2** accuracy target. The Solitito backend detector is a significant async-analysis improvement and is now eligible for consented `chord_check` recordings and supported `practice_drill` chord attempts, but it is not the browser real-time path. The verifier intentionally trades recall for fewer confident wrong accepts: `accepted` is scored as correct for the target chord, `rejected` is scored as wrong using the best alternative, and `uncertain` avoids awarding or confidently penalizing a chord identity when evidence is ambiguous. Supported practice recordings expose a conservative verified score of `accepted / analyzed * 100`, with clarity and decisive accuracy shown separately so model uncertainty does not masquerade as mastery. WCSR is duration-weighted and helps compare against MIR literature, while verifier recall remains the learner-facing trust metric.
 
 ## 6. Audio and Analysis Requirements
 

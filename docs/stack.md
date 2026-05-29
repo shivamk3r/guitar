@@ -41,7 +41,7 @@ Chord detection reliability is measured by manual eval CLIs in `apps/frontend/ev
 
 The backend starts with SQLAlchemy table creation rather than a migration framework. Add Alembic before production or before multiple deployed environments need schema upgrades.
 
-The worker runs Solitito ONNX analysis for consented WAV `chord_check` recordings and supported `practice_drill` chord attempts, then writes structured target-aware feedback for history. It writes placeholder analysis results for activity types whose deeper analysis is not implemented yet. Full tuning, rhythm, and guidance models belong to later milestones.
+The worker runs Solitito ONNX analysis for consented WAV `chord_check` recordings and supported `practice_drill` chord attempts, then writes structured target-aware feedback and conservative verified practice scores for history. It writes placeholder analysis results for activity types whose deeper analysis is not implemented yet. Full tuning, rhythm, and guidance models belong to later milestones.
 
 ## Deferred
 

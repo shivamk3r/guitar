@@ -22,6 +22,7 @@ from .config import get_settings
 from .database import SessionLocal, init_db
 from .evals.chord_detection.catalog import CHORDS_BY_ID
 from .evals.chord_detection.dsp import DecodedAudio
+from .practice_score import build_practice_score_metrics
 from .queue import AnalysisQueue
 from .storage import ObjectStorage
 
@@ -248,6 +249,13 @@ def analyze_practice_drill_recording(
     accepted_count = sum(1 for attempt in analyzed_attempts if attempt["verifierStatus"] == "accepted")
     rejected_count = sum(1 for attempt in analyzed_attempts if attempt["verifierStatus"] == "rejected")
     uncertain_count = sum(1 for attempt in analyzed_attempts if attempt["verifierStatus"] == "uncertain")
+    score = build_practice_score_metrics(
+        attempt_count=len(attempts),
+        analyzed_attempt_count=len(analyzed_attempts),
+        accepted_count=accepted_count,
+        rejected_count=rejected_count,
+        uncertain_count=uncertain_count,
+    )
     confidences = [
         confidence
         for attempt in analyzed_attempts
@@ -264,6 +272,7 @@ def analyze_practice_drill_recording(
         "rejectedCount": rejected_count,
         "uncertainCount": uncertain_count,
         "skippedCount": skipped_count,
+        "score": score,
         "averageConfidence": float(np.mean(confidences)) if confidences else None,
         "attempts": analyzed_attempts,
     }
@@ -366,14 +375,16 @@ def placeholder_guidance(recording: models.AudioRecording) -> str:
 
 
 def practice_guidance(practice: dict[str, Any]) -> str:
-    analyzed = int(practice["analyzedAttemptCount"])
-    total = int(practice["attemptCount"])
     accepted = int(practice["acceptedCount"])
     rejected = int(practice["rejectedCount"])
     uncertain = int(practice["uncertainCount"])
+    score = practice.get("score")
+    score_value = score.get("value") if isinstance(score, dict) else None
+    if not isinstance(score_value, (int, float)):
+        score_value = 0.0
     return (
-        f"Backend analyzed {analyzed}/{total} chord attempts with Solitito. "
-        f"Accepted {accepted}, rejected {rejected}, uncertain {uncertain}."
+        f"Backend score {score_value:.0f}/100 · "
+        f"{accepted} confirmed correct, {rejected} wrong, {uncertain} inconclusive."
     )
 
 

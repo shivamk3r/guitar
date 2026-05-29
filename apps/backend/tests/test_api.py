@@ -440,12 +440,22 @@ def test_recording_analysis_endpoint_exposes_practice_attempt_feedback(tmp_path:
     assert analysis_summary["analyzed_attempt_count"] == 2
     assert analysis_summary["accepted_count"] == 1
     assert analysis_summary["rejected_count"] == 1
+    assert analysis_summary["score"]["value"] == 50
+    assert analysis_summary["score"]["label"] == "Building"
+    assert analysis_summary["score"]["analysis_coverage"] == 1
+    assert analysis_summary["score"]["clarity"] == 1
+    assert analysis_summary["score"]["decisive_accuracy"] == 0.5
 
     analysis_response = client.get(f"/v1/recordings/{recording_id}/analysis")
     assert analysis_response.status_code == 200
     analysis = analysis_response.json()
     assert analysis["prediction"] is None
     assert analysis["practice"]["attempt_count"] == 2
+    assert analysis["practice"]["score"]["value"] == 50
+    assert analysis["practice"]["score"]["label"] == "Building"
+    assert analysis["practice"]["score"]["accepted_rate"] == 0.5
+    assert analysis["practice"]["score"]["rejected_rate"] == 0.5
+    assert analysis["practice"]["score"]["uncertain_rate"] == 0
     assert analysis["practice"]["attempts"][0]["expected_chord_id"] == "G"
     assert analysis["practice"]["attempts"][0]["backend_predicted_chord_id"] == "G"
     assert analysis["practice"]["attempts"][1]["verifier_status"] == "rejected"

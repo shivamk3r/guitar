@@ -37,6 +37,7 @@ export interface RecordingAnalysisSummary {
   status: string;
   result: string | null;
   guidance: string | null;
+  score: PracticeScore | null;
   target_chord_id: string | null;
   predicted_chord_id: string | null;
   confidence: number | null;
@@ -46,6 +47,17 @@ export interface RecordingAnalysisSummary {
   rejected_count: number | null;
   uncertain_count: number | null;
   completed_at: string | null;
+}
+
+export interface PracticeScore {
+  value: number;
+  label: string;
+  analysis_coverage: number | null;
+  clarity: number | null;
+  decisive_accuracy: number | null;
+  accepted_rate: number | null;
+  rejected_rate: number | null;
+  uncertain_rate: number | null;
 }
 
 export interface RecordingAnalysis {
@@ -116,6 +128,7 @@ export interface PracticeAnalysis {
   rejected_count: number;
   uncertain_count: number;
   skipped_count: number;
+  score: PracticeScore | null;
   average_confidence: number | null;
   attempts: PracticeAttemptAnalysis[];
 }

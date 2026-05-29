@@ -104,7 +104,7 @@ def test_complete_job_analyzes_timed_practice_attempt_windows(tmp_path: Path) ->
     Base.metadata.create_all(bind=engine)
     session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
     body = wav_bytes(duration_sec=10.0)
-    detector = SequenceChordDetector(["G", "E7"])
+    detector = SequenceChordDetector(["G", "E7", ("A", 0.2)])
 
     with session_local() as db:
         learner = models.Learner(anonymous_id="anonymous-worker-practice-test")
@@ -139,6 +139,16 @@ def test_complete_job_analyzes_timed_practice_attempt_windows(tmp_path: Path) ->
                         "timingDeltaMs": 0,
                         "score": {"score": 7},
                     },
+                    {
+                        "id": "attempt-2",
+                        "expectedIndex": 2,
+                        "chordId": "D",
+                        "expectedBeat": 4,
+                        "detectedAtBeat": 4,
+                        "detectedChordId": None,
+                        "timingDeltaMs": 0,
+                        "score": {"score": 4},
+                    },
                 ],
             },
         )
@@ -167,16 +177,28 @@ def test_complete_job_analyzes_timed_practice_attempt_windows(tmp_path: Path) ->
     assert completed_job.status == "completed"
     assert result is not None
     practice = result.metrics["practice"]
-    assert practice["attemptCount"] == 2
-    assert practice["analyzedAttemptCount"] == 2
+    assert practice["attemptCount"] == 3
+    assert practice["analyzedAttemptCount"] == 3
     assert practice["acceptedCount"] == 1
     assert practice["rejectedCount"] == 1
+    assert practice["uncertainCount"] == 1
+    assert practice["score"]["value"] == pytest.approx(100 / 3)
+    assert practice["score"]["label"] == "Needs focus"
+    assert practice["score"]["analysisCoverage"] == pytest.approx(1.0)
+    assert practice["score"]["clarity"] == pytest.approx(2 / 3)
+    assert practice["score"]["decisiveAccuracy"] == pytest.approx(0.5)
+    assert practice["score"]["acceptedRate"] == pytest.approx(1 / 3)
+    assert practice["score"]["rejectedRate"] == pytest.approx(1 / 3)
+    assert practice["score"]["uncertainRate"] == pytest.approx(1 / 3)
     assert practice["attempts"][0]["expectedChordId"] == "G"
     assert practice["attempts"][0]["predictedChordId"] == "G"
     assert practice["attempts"][1]["expectedChordId"] == "C"
     assert practice["attempts"][1]["predictedChordId"] == "E7"
+    assert practice["attempts"][2]["expectedChordId"] == "D"
+    assert practice["attempts"][2]["verifierStatus"] == "uncertain"
     assert detector.windows[0] == pytest.approx((3.97, 4.95))
     assert detector.windows[1] == pytest.approx((5.92, 6.90))
+    assert detector.windows[2] == pytest.approx((7.92, 8.90))
 
 
 class FakeStorage:
@@ -206,7 +228,7 @@ class FakeChordDetector:
 
 
 class SequenceChordDetector:
-    def __init__(self, chord_ids: list[str]) -> None:
+    def __init__(self, chord_ids: list[str | tuple[str, float]]) -> None:
         self.chord_ids = chord_ids
         self.windows: list[tuple[float, float]] = []
 
@@ -216,14 +238,15 @@ class SequenceChordDetector:
 
     def predict_segment(self, analysis, *, start_sec: float, end_sec: float) -> SolititoPrediction:
         self.windows.append((start_sec, end_sec))
-        chord_id = self.chord_ids[len(self.windows) - 1]
+        item = self.chord_ids[len(self.windows) - 1]
+        chord_id, confidence = item if isinstance(item, tuple) else (item, 0.72)
         root, quality = chord_root_quality(chord_id)
         root_probabilities = np.zeros(len(ROOTS), dtype=np.float64)
         quality_probabilities = np.zeros(len(QUALITIES), dtype=np.float64)
         root_probabilities[ROOTS.index(root)] = 0.9
         quality_probabilities[QUALITIES.index(quality)] = 0.8
         return SolititoPrediction(
-            **prediction_kwargs(chord_id, root_probabilities, quality_probabilities),
+            **prediction_kwargs(chord_id, root_probabilities, quality_probabilities, confidence=confidence),
         )
 
 
@@ -231,13 +254,15 @@ def prediction_kwargs(
     chord_id: str,
     root_probabilities: np.ndarray,
     quality_probabilities: np.ndarray,
+    *,
+    confidence: float = 0.72,
 ):
     root, quality = chord_root_quality(chord_id)
     return {
         "predicted_chord_id": chord_id,
         "root": root,
         "quality": quality,
-        "confidence": 0.72,
+        "confidence": confidence,
         "root_confidence": 0.9,
         "quality_confidence": 0.8,
         "root_probabilities": root_probabilities,

@@ -17,6 +17,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   activityLabel,
+  analysisResultText,
+  backendScoreRows,
   completionLabel,
   formatDateTime,
   formatDuration,
@@ -528,6 +530,7 @@ function practiceDetailRows(analysis: RecordingAnalysis): { label: string; value
   if (!practice) return rows;
   addAnalysisRow(rows, "Result", analysisResultLabel(analysisResultValue(analysis)));
   addAnalysisRow(rows, "Mode", practiceModeLabel(practice.mode));
+  rows.push(...backendScoreRows(practice.score));
   addAnalysisRow(
     rows,
     "Attempts analyzed",
@@ -584,33 +587,6 @@ function practiceModeLabel(value: string | null): string | undefined {
   if (value === "chord_change_drill") return "Chord change drill";
   if (value === "progression_drill") return "Progression drill";
   return completionLabel(value);
-}
-
-function analysisResultText(summary: RecordingAnalysisSummary): string {
-  if (summary.status === "queued" || summary.status === "running")
-    return "Backend analysis pending";
-  if (summary.status === "failed") return "Backend analysis failed";
-  if (summary.result === "analyzed") {
-    if (summary.attempt_count == null) return "Backend practice analysis complete";
-    const analyzed = summary.analyzed_attempt_count ?? summary.attempt_count;
-    const accepted = summary.accepted_count ?? 0;
-    const rejected = summary.rejected_count ?? 0;
-    const uncertain = summary.uncertain_count ?? 0;
-    return `Backend analyzed ${analyzed}/${summary.attempt_count} attempts · ${accepted} accepted, ${rejected} rejected, ${uncertain} uncertain`;
-  }
-  if (summary.result === "accepted") {
-    const chord = summary.target_chord_id ?? summary.predicted_chord_id;
-    return chord ? `Accepted ${chord}` : "Accepted";
-  }
-  if (summary.result === "rejected") {
-    const target = summary.target_chord_id ?? "target";
-    const predicted = summary.predicted_chord_id ?? "another chord";
-    return `Expected ${target}, heard ${predicted}`;
-  }
-  if (summary.result === "uncertain") return "Backend result inconclusive";
-  if (summary.result === "skipped") return summary.guidance ?? "Backend analysis skipped";
-  if (summary.result === "unavailable") return summary.guidance ?? "Backend analysis unavailable";
-  return summary.guidance ?? "Backend analysis not available";
 }
 
 function analysisStatusLabel(status: string): string {

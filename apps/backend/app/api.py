@@ -17,6 +17,7 @@ from .schemas import (
     LearnerOut,
     PracticeAnalysisOut,
     PracticeAttemptAnalysisOut,
+    PracticeScoreOut,
     ProgressOut,
     RecordingAnalysisOut,
     RecordingAnalysisSummaryOut,
@@ -29,6 +30,7 @@ from .schemas import (
     SessionCreate,
     SessionOut,
 )
+from .practice_score import build_practice_score_metrics, practice_score_label
 from .storage import ObjectStorage, get_object_storage
 
 router = APIRouter(prefix="/v1")
@@ -280,10 +282,12 @@ def build_analysis_summary(recording: models.AudioRecording) -> RecordingAnalysi
         )
     metrics = job.result.metrics or {}
     result = analysis_result_label(metrics)
+    practice = metrics.get("practice")
     return RecordingAnalysisSummaryOut(
         status=job.status,
         result=result,
         guidance=analysis_guidance(metrics, job.result.guidance),
+        score=analysis_practice_score(practice) if isinstance(practice, dict) else None,
         target_chord_id=string_value(metrics.get("expectedChordId")) or session_chord_id(recording),
         predicted_chord_id=string_value(metrics.get("predictedChordId")),
         confidence=float_value(metrics.get("confidence")),
@@ -431,6 +435,113 @@ def analysis_capture(metrics: dict) -> AnalysisCaptureOut:
     )
 
 
+def analysis_practice_score(practice: dict, *, attempts_len: int | None = None) -> PracticeScoreOut | None:
+    counts = practice_score_counts(practice, attempts_len=attempts_len)
+    if counts is None:
+        return None
+
+    derived = build_practice_score_metrics(**counts)
+    stored = practice.get("score")
+    if not isinstance(stored, dict):
+        return practice_score_out(derived)
+
+    value = first_float_value(stored.get("value"), derived.get("value")) or 0.0
+    return PracticeScoreOut(
+        value=value,
+        label=string_value(stored.get("label")) or practice_score_label(value),
+        analysis_coverage=first_float_value(
+            stored.get("analysisCoverage"),
+            stored.get("analysis_coverage"),
+            derived.get("analysisCoverage"),
+        ),
+        clarity=first_float_value(stored.get("clarity"), derived.get("clarity")),
+        decisive_accuracy=first_float_value(
+            stored.get("decisiveAccuracy"),
+            stored.get("decisive_accuracy"),
+            derived.get("decisiveAccuracy"),
+        ),
+        accepted_rate=first_float_value(
+            stored.get("acceptedRate"),
+            stored.get("accepted_rate"),
+            derived.get("acceptedRate"),
+        ),
+        rejected_rate=first_float_value(
+            stored.get("rejectedRate"),
+            stored.get("rejected_rate"),
+            derived.get("rejectedRate"),
+        ),
+        uncertain_rate=first_float_value(
+            stored.get("uncertainRate"),
+            stored.get("uncertain_rate"),
+            derived.get("uncertainRate"),
+        ),
+    )
+
+
+def practice_score_counts(
+    practice: dict,
+    *,
+    attempts_len: int | None = None,
+) -> dict[str, int] | None:
+    raw_attempts = practice.get("attempts")
+    attempt_count = int_value(practice.get("attemptCount"))
+    analyzed_attempt_count = int_value(practice.get("analyzedAttemptCount"))
+    accepted_count = int_value(practice.get("acceptedCount"))
+    rejected_count = int_value(practice.get("rejectedCount"))
+    uncertain_count = int_value(practice.get("uncertainCount"))
+
+    if isinstance(raw_attempts, list):
+        analyzed_attempt_count = analyzed_attempt_count if analyzed_attempt_count is not None else len(raw_attempts)
+        accepted_count = accepted_count if accepted_count is not None else count_verifier_status(raw_attempts, "accepted")
+        rejected_count = rejected_count if rejected_count is not None else count_verifier_status(raw_attempts, "rejected")
+        uncertain_count = (
+            uncertain_count if uncertain_count is not None else count_verifier_status(raw_attempts, "uncertain")
+        )
+
+    if attempts_len is not None:
+        analyzed_attempt_count = analyzed_attempt_count if analyzed_attempt_count is not None else attempts_len
+
+    if (
+        attempt_count is None
+        and analyzed_attempt_count is None
+        and accepted_count is None
+        and rejected_count is None
+        and uncertain_count is None
+    ):
+        return None
+
+    analyzed = analyzed_attempt_count if analyzed_attempt_count is not None else 0
+    return {
+        "attempt_count": attempt_count if attempt_count is not None else analyzed,
+        "analyzed_attempt_count": analyzed,
+        "accepted_count": accepted_count if accepted_count is not None else 0,
+        "rejected_count": rejected_count if rejected_count is not None else 0,
+        "uncertain_count": uncertain_count if uncertain_count is not None else 0,
+    }
+
+
+def count_verifier_status(attempts: list, status: str) -> int:
+    return sum(
+        1
+        for item in attempts
+        if isinstance(item, dict) and string_value(item.get("verifierStatus")) == status
+    )
+
+
+def practice_score_out(score: dict[str, float | str | None]) -> PracticeScoreOut:
+    value = first_float_value(score.get("value")) or 0.0
+    return PracticeScoreOut(
+        value=value,
+        label=string_value(score.get("label")) or practice_score_label(value),
+        analysis_coverage=first_float_value(score.get("analysisCoverage")),
+        clarity=first_float_value(score.get("clarity")),
+        decisive_accuracy=first_float_value(score.get("decisiveAccuracy")),
+        accepted_rate=first_float_value(score.get("acceptedRate")),
+        rejected_rate=first_float_value(score.get("rejectedRate")),
+        uncertain_rate=first_float_value(score.get("uncertainRate")),
+    )
+
+
 def analysis_practice(metrics: dict) -> PracticeAnalysisOut | None:
     practice = metrics.get("practice")
     if not isinstance(practice, dict):
@@ -495,6 +606,7 @@ def analysis_practice(metrics: dict) -> PracticeAnalysisOut | None:
         rejected_count=rejected_count if rejected_count is not None else 0,
         uncertain_count=uncertain_count if uncertain_count is not None else 0,
         skipped_count=skipped_count if skipped_count is not None else 0,
+        score=analysis_practice_score(practice, attempts_len=len(attempts)),
         average_confidence=float_value(practice.get("averageConfidence")),
         attempts=attempts,
     )

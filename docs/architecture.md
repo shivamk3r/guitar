@@ -94,7 +94,7 @@ The API uses anonymous learner profiles for now. Account auth is a later milesto
 9. For consented recordings only, the frontend uploads the recorded audio blob to the API.
 10. API stores metadata in Postgres, stores consented audio in MinIO, and enqueues an SQS analysis job for saved recordings.
 11. Worker consumes the job and writes `AnalysisResult` rows. Chord checks are analyzed as one target chord; supported practice drills are segmented by saved BPM/timing metadata and analyzed per attempt.
-12. History responses include per-recording analysis summaries, and `GET /v1/recordings/{recording_id}/analysis` exposes detailed learner-facing feedback.
+12. History responses include per-recording analysis summaries with verified backend practice scores, and `GET /v1/recordings/{recording_id}/analysis` exposes detailed learner-facing feedback.
 13. History and progress endpoints use session and analysis history to guide the learner.
 
 ## 7. Local Runtime
