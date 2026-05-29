@@ -24,6 +24,7 @@ def render_markdown_report(report: dict) -> str:
         f"Generated: {report['generatedAtIso']}",
         f"Algorithm fingerprint: `{report['algorithmFingerprint']}`",
         f"Datasets: {', '.join(report['options']['datasets'])}",
+        f"Detector: {report['options'].get('detector', report['implementation'])}",
         f"Cache: {report['cache']['hits']} hits, {report['cache']['misses']} misses",
         "",
         "## Headline",

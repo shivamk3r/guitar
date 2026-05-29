@@ -1,1 +1,1 @@
-"""Python research bench for chord detection evals."""
+"""Python chord detection evals."""

@@ -8,7 +8,7 @@ from typing import Any
 
 from .config import EVAL_VERSION, default_cache_root
 from .datasets import DATASET_IDS, load_dataset
-from .evaluator import evaluate_samples
+from .evaluator import DETECTOR_DSP, DETECTOR_SOLITITO, evaluate_samples
 from .hashing import algorithm_fingerprint
 from .metrics import compute_metrics
 from .report import write_reports
@@ -17,7 +17,7 @@ from .report import write_reports
 def main() -> None:
     options = parse_args()
     options.cache_root.mkdir(parents=True, exist_ok=True)
-    fingerprint = algorithm_fingerprint()
+    fingerprint = algorithm_fingerprint(detector=options.detector)
     dataset_loads = [
         load_dataset(dataset_id, cache_root=options.cache_root, guitarset_mode=options.guitarset_mode)
         for dataset_id in options.datasets
@@ -32,6 +32,7 @@ def main() -> None:
         samples=samples,
         cache_root=options.cache_root,
         algorithm_fingerprint=fingerprint,
+        detector=options.detector,
         force=options.force,
     )
     report = build_report(options=options, fingerprint=fingerprint, dataset_loads=dataset_loads, results=results)
@@ -49,7 +50,7 @@ def build_report(*, options: argparse.Namespace, fingerprint: str, dataset_loads
         dataset_results = [result for result in results if result["datasetId"] == dataset_id]
         by_dataset[dataset_id] = compute_metrics(dataset_results) if dataset_results else None
     return {
-        "implementation": "python",
+        "implementation": "python" if options.detector == DETECTOR_DSP else f"python-{options.detector}",
         "generatedAtIso": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "evalVersion": EVAL_VERSION,
         "algorithmFingerprint": fingerprint,
@@ -57,6 +58,7 @@ def build_report(*, options: argparse.Namespace, fingerprint: str, dataset_loads
             "datasets": options.datasets,
             "limit": options.limit,
             "guitarSetMode": options.guitarset_mode,
+            "detector": options.detector,
         },
         "datasetSkips": dataset_skips,
         "cache": {
@@ -76,6 +78,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--cache-root", type=Path, default=default_cache_root())
     parser.add_argument("--guitarset-mode", choices=("comp", "all"), default="comp")
+    parser.add_argument("--detector", choices=(DETECTOR_DSP, DETECTOR_SOLITITO), default=DETECTOR_DSP)
     argv = sys.argv[1:]
     if argv[:1] == ["--"]:
         argv = argv[1:]
@@ -100,6 +103,7 @@ def print_summary(report: dict[str, Any], markdown_path: str) -> None:
     summary = report["summary"]["summary"]
     print("")
     print("Python chord detection eval complete")
+    print(f"Detector: {report['options']['detector']}")
     print(f"Evaluated: {summary['evaluated']}")
     print(f"Duration: {summary['totalDurationSec']:.1f}s")
     print(f"Top-1 accuracy: {pct(summary['accuracy'])}")

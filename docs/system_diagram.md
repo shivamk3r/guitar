@@ -18,7 +18,7 @@ flowchart LR
   subgraph LocalEval["Local offline evals"]
     EvalCache[(".eval-cache chord datasets/results/reports")]
     FrontendEval["Frontend TypeScript eval CLI"]
-    PyEval["Python eval-only research bench"]
+    PyEval["Python DSP/Solitito eval CLI"]
   end
 
   subgraph LocalInfra["Local Docker Compose infrastructure"]
@@ -42,7 +42,7 @@ flowchart LR
   API -->|"enqueue analysis job"| SQS
   SQS --> Worker
   Worker -->|"read job and metadata"| Postgres
-  Worker -->|"future: read audio"| MinIO
+  Worker -->|"read consented WAV for chord_check"| MinIO
   Worker -->|"write analysis result"| Postgres
   FrontendEval -.->|"reuses detector source"| Worklet
   FrontendEval --> EvalCache

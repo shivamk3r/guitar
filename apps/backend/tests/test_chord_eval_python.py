@@ -18,6 +18,14 @@ from app.evals.chord_detection.dsp import (
 )
 from app.evals.chord_detection.metrics import compute_metrics
 from app.evals.chord_detection.wcsr import compare_wcsr_variant
+from app.chord_detection.solitito import (
+    QUALITIES,
+    ROOTS,
+    SolititoPrediction,
+    product_chord_id,
+    top_product_predictions,
+    verify_prediction,
+)
 
 
 def test_python_chord_catalog_matches_frontend_ids() -> None:
@@ -80,6 +88,7 @@ def test_python_cli_writes_report_schema_for_fixture(tmp_path: Path) -> None:
     assert report_path.exists()
     report_text = report_path.read_text()
     assert '"implementation": "python"' in report_text
+    assert '"detector": "dsp"' in report_text
     assert '"wcsr"' in report_text
 
 
@@ -122,6 +131,50 @@ def test_python_wcsr_compares_representative_mir_vocabularies() -> None:
     assert compare_wcsr_variant("A7", "A", "tetrads") == 0
     assert compare_wcsr_variant("A7", "A7", "sevenths") == 1
     assert compare_wcsr_variant("E5", "E", "mirex") == -1
+
+
+def test_solitito_product_adapter_limits_predictions_to_supported_chords() -> None:
+    assert product_chord_id("C", "") == "C"
+    assert product_chord_id("A", "m") == "Am"
+    assert product_chord_id("G", "7") == "G7"
+    assert product_chord_id("C", "Maj7") is None
+    assert product_chord_id("Noise", "") is None
+
+    root_probabilities = np.zeros(len(ROOTS), dtype=np.float64)
+    quality_probabilities = np.zeros(len(QUALITIES), dtype=np.float64)
+    root_probabilities[ROOTS.index("A")] = 0.8
+    quality_probabilities[QUALITIES.index("m")] = 0.7
+    quality_probabilities[QUALITIES.index("m7")] = 0.9
+
+    top_k = top_product_predictions(root_probabilities, quality_probabilities)
+
+    assert top_k[0]["chordId"] == "Am"
+    assert abs(float(top_k[0]["confidence"]) - 0.56) < 1e-12
+
+
+def test_solitito_verifier_uses_expected_product_probability() -> None:
+    root_probabilities = np.zeros(len(ROOTS), dtype=np.float64)
+    quality_probabilities = np.zeros(len(QUALITIES), dtype=np.float64)
+    root_probabilities[ROOTS.index("D")] = 0.9
+    quality_probabilities[QUALITIES.index("")] = 0.8
+    prediction = SolititoPrediction(
+        predicted_chord_id="D",
+        root="D",
+        quality="",
+        confidence=0.72,
+        root_confidence=0.9,
+        quality_confidence=0.8,
+        root_probabilities=root_probabilities,
+        quality_probabilities=quality_probabilities,
+        frame_count=32,
+        frames_used=1,
+        top_k=top_product_predictions(root_probabilities, quality_probabilities),
+    )
+
+    result = verify_prediction(prediction, CHORDS_BY_ID["D"])
+
+    assert result["status"] == "accepted"
+    assert result["acceptedChordId"] == "D"
 
 
 def synth_strum(midis: tuple[int | None, ...], sample_rate: int = 48_000, seconds: float = 1.0) -> np.ndarray:

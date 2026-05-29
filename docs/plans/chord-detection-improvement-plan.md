@@ -1,5 +1,7 @@
 # Chord Detection Improvement Plan
 
+> Status: Completed for the classical DSP baseline. Superseded for backend async chord analysis by the Solitito ONNX worker integration; see `docs/software_requirements.md`, `docs/stack.md`, and `apps/frontend/evals/chord-detection/README.md` for the current detector split and eval numbers.
+
 ## Summary
 Build a classical DSP v1 improvement with two implementations: the browser remains the real-time production detector, and Python becomes an eval-only research bench. The shared referee will report target-aware verifier metrics for both implementations, prioritizing lower wrong accepts over raw recall.
 

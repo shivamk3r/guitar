@@ -19,7 +19,7 @@ If implementation and docs disagree, update the docs in the same change.
 
 - Frontend: Vite, React 18, TypeScript strict, Tailwind, Zustand, IndexedDB, Web Audio, AudioWorklet.
 - Backend: FastAPI, SQLAlchemy, Postgres, MinIO, LocalStack SQS, Python worker.
-- Tests/evals: Vitest, Playwright, Pytest, manual target-aware + WCSR chord detection evals for frontend and Python research bench.
+- Tests/evals: Vitest, Playwright, Pytest, manual target-aware + WCSR chord detection evals for frontend, Python DSP, and Python Solitito.
 - Tooling: pnpm workspace, Biome, Docker Compose.
 
 ## Layout
@@ -45,6 +45,7 @@ pnpm test:e2e
 pnpm eval:chords
 pnpm eval:chords:frontend
 pnpm eval:chords:python
+pnpm eval:chords:models
 pnpm eval:chords:compare
 pnpm eval:chords:prepare
 ```
@@ -60,6 +61,7 @@ python3 -m pytest
 ## Rules
 
 - Immediate musical feedback stays browser-side for latency.
+- Backend async `chord_check` WAV analysis uses the pinned Solitito ONNX detector.
 - Recording/upload requires explicit learner consent.
 - The frontend uploads recordings through the API, not directly to MinIO.
 - Audio bytes go to object storage; metadata goes to Postgres.

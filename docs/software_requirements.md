@@ -78,7 +78,7 @@ The product closes the loop between "I played something" and "what should I do n
 - **FR-D3** Persist session metadata for meaningful tuning, chord-check, and practice activity, audio object references when consented recordings exist, analysis jobs, and analysis results in backend storage.
 - **FR-D4** Store raw audio in S3-compatible object storage locally through MinIO.
 - **FR-D5** Enqueue recording analysis through an SQS-compatible queue locally through LocalStack.
-- **FR-D6** A worker consumes analysis jobs and writes extracted metrics/results. The first implementation may write placeholder metrics.
+- **FR-D6** A worker consumes analysis jobs and writes extracted metrics/results. It runs Solitito chord analysis for supported `chord_check` recordings and may write placeholder metrics for activity types whose deeper analysis is not implemented yet.
 - **FR-D7** Expose learner progress through a backend read endpoint that can later power personalized guidance.
 
 ## 5. Non-Functional Requirements
@@ -92,29 +92,30 @@ The product closes the loop between "I played something" and "what should I do n
 
 ### 5.1 Current Chord Detection Eval Baseline
 
-The current chord detector is measured with the manual offline eval harness in `apps/frontend/evals/chord-detection`. The browser detector is the real-time production path; the Python implementation is an eval-only research bench that reads the same prepared datasets and report schema.
+The current chord detector is measured with the manual offline eval harness in `apps/frontend/evals/chord-detection`. The browser detector remains the real-time production path. The Python eval can run the classical DSP baseline or the pinned Solitito ONNX backend detector against the same prepared datasets and report schema.
 
 Latest full target-aware + WCSR evals were generated 2026-05-29 IST:
 
 | Implementation | Timestamp | Fingerprint | Evaluated | Duration | Top-1 accuracy | Exact WCSR | Root WCSR | Maj-Min WCSR | Verifier recall | Verifier weighted recall | False accept trials | Wrong-accept samples | Uncertain |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Frontend | `2026-05-29T02:22:56.256Z` | `42dbecafd82639db` | 955 | 2502.5s | 14.3% | 13.3% | 37.3% | 30.5% | 10.1% | 9.5% | 0.7% | 11.8% | 69.2% |
-| Python | `2026-05-29T02:23:36.655861Z` | `7465ce0d02de1557` | 955 | 2502.5s | 14.2% | 13.2% | 37.7% | 30.7% | 9.7% | 9.3% | 0.7% | 11.0% | 69.4% |
+| Frontend | `2026-05-29T03:16:49.487Z` | `42dbecafd82639db` | 955 | 2502.5s | 14.3% | 13.3% | 37.3% | 30.5% | 10.1% | 9.5% | 0.7% | 11.8% | 69.2% |
+| Python DSP | `2026-05-29T03:16:01.201643Z` | `24601413f5c157c8` | 955 | 2502.5s | 14.2% | 13.2% | 37.7% | 30.7% | 9.7% | 9.3% | 0.7% | 11.0% | 69.4% |
+| Python Solitito | `2026-05-29T03:13:19.880711Z` | `397a440dd8aa9433` | 955 | 2502.5s | 72.4% | 74.7% | 82.8% | 78.5% | 53.2% | 57.4% | 0.2% | 4.0% | 44.1% |
 
-This is still below the long-term **NFR-2** accuracy target. The current v1 verifier intentionally trades recall for fewer confident wrong accepts: `accepted` is scored as correct for the target chord, `rejected` is scored as wrong using the best alternative, and `uncertain` avoids awarding or confidently penalizing a chord identity when evidence is ambiguous. WCSR is duration-weighted and helps compare against MIR literature, while verifier recall remains the learner-facing trust metric. Future detection work should continue to optimize target-aware verifier recall under a low false-accept budget rather than only improving open-ended top-1 recognizer accuracy.
+The browser and classical DSP baselines remain below the long-term **NFR-2** accuracy target. The Solitito backend detector is a significant async-analysis improvement and is now eligible for consented `chord_check` recording analysis, but it is not the browser real-time path. The verifier intentionally trades recall for fewer confident wrong accepts: `accepted` is scored as correct for the target chord, `rejected` is scored as wrong using the best alternative, and `uncertain` avoids awarding or confidently penalizing a chord identity when evidence is ambiguous. WCSR is duration-weighted and helps compare against MIR literature, while verifier recall remains the learner-facing trust metric.
 
 ## 6. Audio and Analysis Requirements
 
 - **AR-1** Immediate DSP uses Web Audio and AudioWorklet in the frontend.
 - **AR-2** Tuner pitch detection uses an autocorrelation/YIN-style algorithm.
-- **AR-3** Chord detection uses browser-side harmonic chroma/template analysis, target-aware verification, and per-string classification.
+- **AR-3** Immediate chord detection uses browser-side harmonic chroma/template analysis, target-aware verification, and per-string classification.
 - **AR-4** Rhythm drills use onset detection with timestamps aligned to the audio clock.
 - **AR-5** Recording uses the already-granted microphone stream and does not replace the real-time feedback path.
-- **AR-6** Backend analysis is asynchronous and may use classical DSP, ML, or hybrid models in later milestones.
+- **AR-6** Backend analysis is asynchronous. For consented WAV `chord_check` recordings, the worker runs the pinned Solitito ONNX detector and stores target-aware metrics; other activity types may still write placeholder metrics until deeper analysis is implemented.
 - **AR-7** Browser audio input selection uses the selected `audioinput` device for realtime DSP and consented recording, falls back to browser default if the preferred device is unavailable, and disables switching during active scored or recorded sessions.
 - **AR-8** Microphone labels and device identifiers remain local browser UI/preference state and are not included in recording session metadata by default.
 - **AR-9** Browser microphone capture requests speech processing disabled (`echoCancellation`, `noiseSuppression`, and `autoGainControl`) so guitar recordings keep harmonics, sustain, and room detail. Consented recordings are saved as raw PCM WAV before app analysis filters; compressed browser recording is only a fallback when raw capture is unavailable.
-- **AR-10** Python chord detection remains an eval-only research bench in this milestone and is not wired into backend recording analysis or learner-facing feedback.
+- **AR-10** Python chord detection includes the classical DSP eval bench and the Solitito backend detector. Solitito is wired only to async recording analysis, not to immediate browser feedback.
 
 ## 7. Data Model
 

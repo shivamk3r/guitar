@@ -39,12 +39,13 @@ guitar/
 
 - **Worker (`apps/backend/app/worker.py`)**
   - Polls SQS, loads job/recording metadata, runs asynchronous analysis, and writes results.
-  - The current worker writes placeholder metrics; later milestones add real extraction.
+  - Runs the pinned Solitito ONNX detector for consented WAV `chord_check` recordings.
+  - Writes placeholder metrics for other activity types until deeper extraction is implemented.
 
 - **Python chord eval bench (`apps/backend/app/evals/chord_detection`)**
   - Reads the same prepared `.eval-cache/chord-detection` datasets as the frontend eval CLI.
-  - Mirrors the classical DSP verifier for research and comparison only.
-  - Is not part of the realtime browser feedback path or the backend worker path in this milestone.
+  - Runs the classical DSP verifier by default and can run the Solitito backend detector with `--detector solitito`.
+  - Is not part of the realtime browser feedback path.
 
 - **Infrastructure**
   - Postgres persists relational state.
@@ -111,7 +112,7 @@ Persistent Docker volumes keep Postgres, MinIO, and LocalStack state across rest
 
 - **Frontend unit tests:** Vitest for DSP, scoring, stores, glossary data, and components.
 - **Frontend e2e:** Playwright with fake media devices.
-- **Chord detection evals:** Manual target-aware + WCSR eval harnesses against cached public labelled guitar datasets. Run the browser production path with `pnpm eval:chords` or `pnpm eval:chords:frontend`, run the Python research bench with `pnpm eval:chords:python`, and generate side-by-side reports with `pnpm eval:chords:compare`. Outputs live under `.eval-cache/chord-detection/reports/{frontend,python,comparison}/`.
+- **Chord detection evals:** Manual target-aware + WCSR eval harnesses against cached public labelled guitar datasets. Run the browser production path with `pnpm eval:chords` or `pnpm eval:chords:frontend`, run the Python DSP bench with `pnpm eval:chords:python`, run Solitito with `pnpm eval:chords:python -- --detector solitito`, and generate side-by-side frontend/Python-DSP reports with `pnpm eval:chords:compare`. Outputs live under `.eval-cache/chord-detection/reports/{frontend,python,python-solitito,comparison}/`.
 - **Backend unit/API tests:** Pytest with SQLite and fake storage/queue dependencies.
 - **Compose smoke:** `docker compose config`, `docker compose up --build`, `/health`, and a recording-upload path.
 

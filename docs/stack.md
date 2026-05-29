@@ -17,7 +17,7 @@
 | Worker | Python worker sharing backend domain modules |
 | Local runtime | Docker Compose |
 | Frontend tests | Vitest + Playwright |
-| Audio evals | TypeScript frontend CLI + Python eval-only research bench with cached public datasets |
+| Audio evals | TypeScript frontend CLI + Python DSP/Solitito eval CLI with cached public datasets |
 | Backend tests | Pytest |
 | Frontend lint/format | Biome |
 | Package manager | pnpm workspace |
@@ -35,13 +35,13 @@
 
 Immediate tuner, chord, and rhythm feedback remains browser-side to meet latency requirements. The frontend records consented sessions from the unprocessed mic stream as PCM WAV before app analysis, uploads completed recordings to the API, and does not upload high-frequency audio analysis events.
 
-Chord detection reliability is measured by manual eval CLIs in `apps/frontend/evals/chord-detection` and `apps/backend/app/evals/chord_detection`. The frontend CLI reuses the browser detector code path and remains the production real-time instrument. The Python CLI is an eval-only research bench for DSP iteration; it is not wired into the backend worker. Both read prepared public labelled guitar datasets under `.eval-cache/chord-detection/`, write the same target-aware report schema, and report top-1 accuracy, WCSR variants, verifier recall, positive rejects, uncertain outcomes, false-accept trials, wrong-accept samples, per-chord metrics, and confusion matrices.
+Chord detection reliability is measured by manual eval CLIs in `apps/frontend/evals/chord-detection` and `apps/backend/app/evals/chord_detection`. The frontend CLI reuses the browser detector code path and remains the production real-time instrument. The Python CLI can run the classical DSP baseline or the pinned Solitito ONNX backend detector. Both read prepared public labelled guitar datasets under `.eval-cache/chord-detection/`, write the same target-aware report schema, and report top-1 accuracy, WCSR variants, verifier recall, positive rejects, uncertain outcomes, false-accept trials, wrong-accept samples, per-chord metrics, and confusion matrices.
 
 ## Backend Notes
 
 The backend starts with SQLAlchemy table creation rather than a migration framework. Add Alembic before production or before multiple deployed environments need schema upgrades.
 
-The worker currently writes placeholder analysis results. Full extraction and guidance models belong to later milestones.
+The worker runs Solitito ONNX analysis for consented WAV `chord_check` recordings and writes placeholder analysis results for other activity types. Full tuning, rhythm, and guidance models belong to later milestones.
 
 ## Deferred
 

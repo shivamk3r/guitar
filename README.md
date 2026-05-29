@@ -68,26 +68,29 @@ python3 -m pytest
 
 ### Chord Detection Evals
 
-Offline chord detection evals benchmark the browser production detector and the Python research bench against public labelled guitar datasets. They are manual because the first full run downloads about 2.1 GB of cached dataset files.
+Offline chord detection evals benchmark the browser production detector, the Python DSP baseline, and the Python Solitito backend detector against public labelled guitar datasets. They are manual because the first full run downloads about 2.1 GB of cached dataset files.
 
 ```sh
 pnpm eval:chords:prepare
 pnpm eval:chords
 pnpm eval:chords:frontend
 pnpm eval:chords:python
+pnpm eval:chords:python -- --detector solitito
+pnpm eval:chords:models
 pnpm eval:chords:compare
 pnpm eval:chords -- --limit 100
 pnpm eval:chords -- --force
 ```
 
-Datasets and per-sample results are cached in `.eval-cache/chord-detection/`, which is ignored by git. Latest reports are written under `.eval-cache/chord-detection/reports/{frontend,python,comparison}/`; see [apps/frontend/evals/chord-detection/README.md](apps/frontend/evals/chord-detection/README.md) for details.
+Datasets, Solitito model assets, and per-sample results are cached in `.eval-cache/chord-detection/`, which is ignored by git. Latest reports are written under `.eval-cache/chord-detection/reports/{frontend,python,python-solitito,comparison}/`; see [apps/frontend/evals/chord-detection/README.md](apps/frontend/evals/chord-detection/README.md) for details.
 
 Current full target-aware + WCSR evals, generated 2026-05-29 IST:
 
 | Implementation | Evaluated | Duration | Top-1 accuracy | Exact WCSR | Root WCSR | Maj-Min WCSR | Verifier recall | Verifier weighted recall | False accept trials | Wrong-accept samples |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Frontend `42dbecafd82639db` | 955 | 2502.5s | 14.3% | 13.3% | 37.3% | 30.5% | 10.1% | 9.5% | 0.7% | 11.8% |
-| Python `7465ce0d02de1557` | 955 | 2502.5s | 14.2% | 13.2% | 37.7% | 30.7% | 9.7% | 9.3% | 0.7% | 11.0% |
+| Python DSP `24601413f5c157c8` | 955 | 2502.5s | 14.2% | 13.2% | 37.7% | 30.7% | 9.7% | 9.3% | 0.7% | 11.0% |
+| Python Solitito `397a440dd8aa9433` | 955 | 2502.5s | 72.4% | 74.7% | 82.8% | 78.5% | 53.2% | 57.4% | 0.2% | 4.0% |
 
 ## Privacy and Consent
 
@@ -95,7 +98,7 @@ Realtime feedback stays in the browser. Recording upload is only enabled after e
 
 ## Status
 
-Work-in-progress platform scaffold. The worker currently writes placeholder analysis results; deeper audio-derived skill modeling is a later milestone.
+Work-in-progress platform scaffold. The worker runs Solitito ONNX chord analysis for consented WAV `chord_check` recordings and keeps placeholder analysis for other activity types.
 
 ## License
 
