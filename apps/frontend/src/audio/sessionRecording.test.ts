@@ -119,6 +119,9 @@ describe("activity session capture", () => {
     expect(closeLearningSession).toHaveBeenCalledWith("session-1", {
       completionStatus: "completed",
     });
+    expect(vi.mocked(closeLearningSession).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(uploadRecording).mock.invocationCallOrder[0]!,
+    );
   });
 });
 

@@ -310,3 +310,143 @@ def test_recording_analysis_endpoint_exposes_structured_backend_feedback(tmp_pat
     assert analysis["prediction"]["best_alternative_chord_id"] == "C"
     assert analysis["prediction"]["top_predictions"][0]["chord_id"] == "G"
     assert analysis["capture"]["raw_root"] == "G"
+
+
+def test_recording_analysis_endpoint_exposes_practice_attempt_feedback(tmp_path: Path) -> None:
+    client, _storage, queue, session_local = build_client(tmp_path)
+
+    learner = client.post("/v1/learners", json={"anonymous_id": "anonymous-practice-analysis"}).json()
+    client.post(
+        "/v1/consents/recording",
+        json={"learner_id": learner["id"], "granted": True, "source": "settings"},
+    )
+    session = client.post(
+        "/v1/sessions",
+        json={
+            "learner_id": learner["id"],
+            "activity_type": "practice_drill",
+            "client_metadata": {
+                "practiceMode": "timed_chord_practice",
+                "bpm": 72,
+                "beatsPerChord": 4,
+                "countInBeats": 4,
+            },
+        },
+    ).json()
+
+    upload_response = client.post(
+        f"/v1/sessions/{session['id']}/recordings",
+        files={"file": ("practice.wav", b"analysis-audio", "audio/wav")},
+    )
+    assert upload_response.status_code == 201
+    recording_id = upload_response.json()["id"]
+    job_id, queued_recording_id = queue.messages[0]
+    assert queued_recording_id == recording_id
+
+    with session_local() as db:
+        job = db.get(models.AnalysisJob, job_id)
+        assert job is not None
+        job.status = "completed"
+        job.completed_at = models.utcnow()
+        db.add(
+            models.AnalysisResult(
+                job_id=job_id,
+                recording_id=recording_id,
+                guidance="Backend analyzed 2/2 chord attempts with Solitito. Accepted 1, rejected 1, uncertain 0.",
+                metrics={
+                    "placeholder": False,
+                    "activity": "practice_drill",
+                    "durationSec": 8.0,
+                    "detector": {
+                        "detector": "solitito",
+                        "modelId": "greblus/solitito-ai",
+                        "modelRevision": "revision-1",
+                        "modelFilename": "model.onnx",
+                    },
+                    "practice": {
+                        "mode": "timed_chord_practice",
+                        "bpm": 72,
+                        "beatsPerChord": 4,
+                        "countInBeats": 4,
+                        "attemptCount": 2,
+                        "analyzedAttemptCount": 2,
+                        "acceptedCount": 1,
+                        "rejectedCount": 1,
+                        "uncertainCount": 0,
+                        "skippedCount": 0,
+                        "averageConfidence": 0.61,
+                        "attempts": [
+                            {
+                                "id": "attempt-0",
+                                "expectedIndex": 0,
+                                "expectedChordId": "G",
+                                "frontendDetectedChordId": "G",
+                                "frontendScore": 8,
+                                "predictedChordId": "G",
+                                "verifierStatus": "accepted",
+                                "confidence": 0.72,
+                                "expectedSimilarity": 0.72,
+                                "bestAlternativeChordId": "C",
+                                "alternativeSimilarity": 0.18,
+                                "verifierMargin": 0.54,
+                                "detectedAtBeat": 0.05,
+                                "timingDeltaMs": 50,
+                                "captureStartSec": 3.97,
+                                "captureEndSec": 4.95,
+                                "rawRoot": "G",
+                                "rawQuality": "",
+                                "framesUsed": 12,
+                                "topK": [
+                                    {"chordId": "G", "confidence": 0.72, "root": "G", "quality": ""},
+                                ],
+                            },
+                            {
+                                "id": "attempt-1",
+                                "expectedIndex": 1,
+                                "expectedChordId": "C",
+                                "frontendDetectedChordId": "C",
+                                "frontendScore": 7,
+                                "predictedChordId": "E7",
+                                "verifierStatus": "rejected",
+                                "confidence": 0.5,
+                                "expectedSimilarity": 0.1,
+                                "bestAlternativeChordId": "E7",
+                                "alternativeSimilarity": 0.72,
+                                "verifierMargin": -0.62,
+                                "detectedAtBeat": 4,
+                                "timingDeltaMs": 0,
+                                "captureStartSec": 7.3,
+                                "captureEndSec": 8.0,
+                                "rawRoot": "E",
+                                "rawQuality": "7",
+                                "framesUsed": 10,
+                                "topK": [
+                                    {"chordId": "E7", "confidence": 0.72, "root": "E", "quality": "7"},
+                                ],
+                            },
+                        ],
+                    },
+                },
+            )
+        )
+        db.commit()
+
+    history_response = client.get(f"/v1/learners/{learner['id']}/history")
+    assert history_response.status_code == 200
+    analysis_summary = history_response.json()[0]["recordings"][0]["analysis"]
+    assert analysis_summary["status"] == "completed"
+    assert analysis_summary["result"] == "analyzed"
+    assert analysis_summary["attempt_count"] == 2
+    assert analysis_summary["analyzed_attempt_count"] == 2
+    assert analysis_summary["accepted_count"] == 1
+    assert analysis_summary["rejected_count"] == 1
+
+    analysis_response = client.get(f"/v1/recordings/{recording_id}/analysis")
+    assert analysis_response.status_code == 200
+    analysis = analysis_response.json()
+    assert analysis["prediction"] is None
+    assert analysis["practice"]["attempt_count"] == 2
+    assert analysis["practice"]["attempts"][0]["expected_chord_id"] == "G"
+    assert analysis["practice"]["attempts"][0]["backend_predicted_chord_id"] == "G"
+    assert analysis["practice"]["attempts"][1]["verifier_status"] == "rejected"
+    assert analysis["practice"]["attempts"][1]["top_predictions"][0]["chord_id"] == "E7"

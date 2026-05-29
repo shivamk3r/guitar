@@ -74,17 +74,22 @@ export async function startActivitySession(input: {
     recordingEnabled: recorder !== null,
     async stop(finalMetadata) {
       let uploadError: unknown = null;
+      let blob: Blob | null = null;
       try {
         if (recorder) {
-          const blob = await recorder.stop();
-          if (blob.size > 0) {
-            await uploadRecording({ sessionId: session.id, blob, capturedAtIso });
-          }
+          blob = await recorder.stop();
         }
       } catch (err) {
         uploadError = err;
       }
       await closeLearningSession(session.id, finalMetadata);
+      try {
+        if (blob && blob.size > 0) {
+          await uploadRecording({ sessionId: session.id, blob, capturedAtIso });
+        }
+      } catch (err) {
+        uploadError = err;
+      }
       if (uploadError) throw uploadError;
     },
   };

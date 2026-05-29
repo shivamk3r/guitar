@@ -42,7 +42,7 @@ flowchart LR
   API -->|"enqueue analysis job"| SQS
   SQS --> Worker
   Worker -->|"read job and metadata"| Postgres
-  Worker -->|"read consented WAV for chord_check"| MinIO
+  Worker -->|"read consented WAV for chord_check/practice_drill"| MinIO
   Worker -->|"write analysis result"| Postgres
   FrontendEval -.->|"reuses detector source"| Worklet
   FrontendEval --> EvalCache

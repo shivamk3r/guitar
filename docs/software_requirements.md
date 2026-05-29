@@ -67,7 +67,7 @@ The product closes the loop between "I played something" and "what should I do n
 - **FR-H1** Provide a History page that lists tuning, chord-check, and practice sessions in chronological order.
 - **FR-H2** Show each activity's type, start time, duration, completion status, score or tuning result, and whether a recording is available.
 - **FR-H3** Let learners open activity details with saved configuration including tuning preset, chord targets, BPM, beats per chord, practice length, score breakdown, and attempts when available.
-- **FR-H4** Show backend recording-analysis status and detailed chord feedback when an analysis result is available.
+- **FR-H4** Show backend recording-analysis status, detailed chord feedback, and per-attempt backend feedback for supported practice recordings when an analysis result is available.
 - **FR-H5** Save meaningful session metadata even when recording consent is disabled.
 - **FR-H6** Only save and replay raw audio when explicit recording consent is enabled.
 - **FR-H7** Use history as the durable foundation for later streaks, weak chord-transition detection, tuning consistency, practice frequency, and recommended drills.
@@ -79,7 +79,7 @@ The product closes the loop between "I played something" and "what should I do n
 - **FR-D3** Persist session metadata for meaningful tuning, chord-check, and practice activity, audio object references when consented recordings exist, analysis jobs, and analysis results in backend storage.
 - **FR-D4** Store raw audio in S3-compatible object storage locally through MinIO.
 - **FR-D5** Enqueue recording analysis through an SQS-compatible queue locally through LocalStack.
-- **FR-D6** A worker consumes analysis jobs and writes extracted metrics/results. It runs Solitito chord analysis for supported `chord_check` recordings and may write placeholder metrics for activity types whose deeper analysis is not implemented yet.
+- **FR-D6** A worker consumes analysis jobs and writes extracted metrics/results. It runs Solitito chord analysis for supported WAV `chord_check` recordings and supported `practice_drill` chord attempts, and may write placeholder metrics for activity types whose deeper analysis is not implemented yet.
 - **FR-D7** Expose learner progress through a backend read endpoint that can later power personalized guidance.
 
 ## 5. Non-Functional Requirements
@@ -95,15 +95,15 @@ The product closes the loop between "I played something" and "what should I do n
 
 The current chord detector is measured with the manual offline eval harness in `apps/frontend/evals/chord-detection`. The browser detector remains the real-time production path. The Python eval can run the classical DSP baseline or the pinned Solitito ONNX backend detector against the same prepared datasets and report schema.
 
-Latest full target-aware + WCSR evals were generated 2026-05-29 IST:
+Latest full target-aware + WCSR evals were generated 2026-05-29 10:11-10:15 IST:
 
 | Implementation | Timestamp | Fingerprint | Evaluated | Duration | Top-1 accuracy | Exact WCSR | Root WCSR | Maj-Min WCSR | Verifier recall | Verifier weighted recall | False accept trials | Wrong-accept samples | Uncertain |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Frontend | `2026-05-29T03:16:49.487Z` | `42dbecafd82639db` | 955 | 2502.5s | 14.3% | 13.3% | 37.3% | 30.5% | 10.1% | 9.5% | 0.7% | 11.8% | 69.2% |
-| Python DSP | `2026-05-29T03:16:01.201643Z` | `24601413f5c157c8` | 955 | 2502.5s | 14.2% | 13.2% | 37.7% | 30.7% | 9.7% | 9.3% | 0.7% | 11.0% | 69.4% |
-| Python Solitito | `2026-05-29T03:13:19.880711Z` | `397a440dd8aa9433` | 955 | 2502.5s | 72.4% | 74.7% | 82.8% | 78.5% | 53.2% | 57.4% | 0.2% | 4.0% | 44.1% |
+| Frontend | `2026-05-29T04:41:41.782Z` | `42dbecafd82639db` | 955 | 2502.5s | 14.3% | 13.3% | 37.3% | 30.5% | 10.1% | 9.5% | 0.7% | 11.8% | 69.2% |
+| Python DSP | `2026-05-29T04:42:13.909381Z` | `24601413f5c157c8` | 955 | 2502.5s | 14.2% | 13.2% | 37.7% | 30.7% | 9.7% | 9.3% | 0.7% | 11.0% | 69.4% |
+| Python Solitito | `2026-05-29T04:45:19.911341Z` | `397a440dd8aa9433` | 955 | 2502.5s | 72.4% | 74.7% | 82.8% | 78.5% | 53.2% | 57.4% | 0.2% | 4.0% | 44.1% |
 
-The browser and classical DSP baselines remain below the long-term **NFR-2** accuracy target. The Solitito backend detector is a significant async-analysis improvement and is now eligible for consented `chord_check` recording analysis, but it is not the browser real-time path. The verifier intentionally trades recall for fewer confident wrong accepts: `accepted` is scored as correct for the target chord, `rejected` is scored as wrong using the best alternative, and `uncertain` avoids awarding or confidently penalizing a chord identity when evidence is ambiguous. WCSR is duration-weighted and helps compare against MIR literature, while verifier recall remains the learner-facing trust metric.
+The browser and classical DSP baselines remain below the long-term **NFR-2** accuracy target. The Solitito backend detector is a significant async-analysis improvement and is now eligible for consented `chord_check` recordings and supported `practice_drill` chord attempts, but it is not the browser real-time path. The verifier intentionally trades recall for fewer confident wrong accepts: `accepted` is scored as correct for the target chord, `rejected` is scored as wrong using the best alternative, and `uncertain` avoids awarding or confidently penalizing a chord identity when evidence is ambiguous. WCSR is duration-weighted and helps compare against MIR literature, while verifier recall remains the learner-facing trust metric.
 
 ## 6. Audio and Analysis Requirements
 
@@ -112,7 +112,7 @@ The browser and classical DSP baselines remain below the long-term **NFR-2** acc
 - **AR-3** Immediate chord detection uses browser-side harmonic chroma/template analysis, target-aware verification, and per-string classification.
 - **AR-4** Rhythm drills use onset detection with timestamps aligned to the audio clock.
 - **AR-5** Recording uses the already-granted microphone stream and does not replace the real-time feedback path.
-- **AR-6** Backend analysis is asynchronous. For consented WAV `chord_check` recordings, the worker runs the pinned Solitito ONNX detector and stores target-aware metrics; other activity types may still write placeholder metrics until deeper analysis is implemented.
+- **AR-6** Backend analysis is asynchronous. For consented WAV `chord_check` recordings and supported `practice_drill` chord attempts, the worker runs the pinned Solitito ONNX detector and stores target-aware metrics; other activity types may still write placeholder metrics until deeper analysis is implemented.
 - **AR-7** Browser audio input selection uses the selected `audioinput` device for realtime DSP and consented recording, falls back to browser default if the preferred device is unavailable, and disables switching during active scored or recorded sessions.
 - **AR-8** Microphone labels and device identifiers remain local browser UI/preference state and are not included in recording session metadata by default.
 - **AR-9** Browser microphone capture requests speech processing disabled (`echoCancellation`, `noiseSuppression`, and `autoGainControl`) so guitar recordings keep harmonics, sustain, and room detail. Consented recordings are saved as raw PCM WAV before app analysis filters; compressed browser recording is only a fallback when raw capture is unavailable.

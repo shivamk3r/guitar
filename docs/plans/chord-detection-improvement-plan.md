@@ -60,6 +60,6 @@ Build a classical DSP v1 improvement with two implementations: the browser remai
 
 ## Assumptions
 - First pass is classical DSP only: no trained ML classifier.
-- Python bench is eval-only for now; backend worker remains placeholder analysis.
+- The original classical Python bench was eval-only; backend async chord analysis is now handled by the later Solitito worker integration documented in `docs/software_requirements.md` and `docs/architecture.md`.
 - The primary success metric is reducing wrong accepts, even if some true chords become `uncertain`.
 - Full eval reports are generated locally under `.eval-cache/` and are not committed unless the repo already tracks a specific report artifact.

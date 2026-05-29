@@ -1,6 +1,6 @@
 # Chord Detection Evals
 
-Manual offline benchmarks for chord detection. The frontend eval exercises the browser production detector path. The Python eval reads the same prepared datasets and report schema, and can run either the classical DSP baseline or the Solitito ONNX backend detector. The backend worker uses Solitito only for async WAV `chord_check` recording analysis.
+Manual offline benchmarks for chord detection. The frontend eval exercises the browser production detector path. The Python eval reads the same prepared datasets and report schema, and can run either the classical DSP baseline or the Solitito ONNX backend detector. The backend worker uses Solitito for async WAV `chord_check` recording analysis and supported `practice_drill` chord-attempt analysis.
 
 ```sh
 pnpm eval:chords:prepare
@@ -60,12 +60,12 @@ Learner-facing scoring uses the verifier status: `accepted` scores the expected 
 
 ## Current Baseline
 
-Latest full target-aware + WCSR runs: 2026-05-29 IST.
+Latest full target-aware + WCSR runs: 2026-05-29 10:11-10:15 IST.
 
 | Implementation | Timestamp | Fingerprint | Evaluated | Duration | Top-1 accuracy | Exact WCSR | Root WCSR | Maj-Min WCSR | Sevenths WCSR | Verifier recall | Verifier weighted recall | Positive rejected | Uncertain | False accept trials | Wrong-accept samples |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Frontend | `2026-05-29T03:16:49.487Z` | `42dbecafd82639db` | 955 | 2502.5s | 14.3% | 13.3% | 37.3% | 30.5% | 13.3% | 10.1% | 9.5% | 20.7% | 69.2% | 0.7% | 11.8% |
-| Python DSP | `2026-05-29T03:16:01.201643Z` | `24601413f5c157c8` | 955 | 2502.5s | 14.2% | 13.2% | 37.7% | 30.7% | 13.2% | 9.7% | 9.3% | 20.8% | 69.4% | 0.7% | 11.0% |
-| Python Solitito | `2026-05-29T03:13:19.880711Z` | `397a440dd8aa9433` | 955 | 2502.5s | 72.4% | 74.7% | 82.8% | 78.5% | 74.7% | 53.2% | 57.4% | 2.7% | 44.1% | 0.2% | 4.0% |
+| Frontend | `2026-05-29T04:41:41.782Z` | `42dbecafd82639db` | 955 | 2502.5s | 14.3% | 13.3% | 37.3% | 30.5% | 13.3% | 10.1% | 9.5% | 20.7% | 69.2% | 0.7% | 11.8% |
+| Python DSP | `2026-05-29T04:42:13.909381Z` | `24601413f5c157c8` | 955 | 2502.5s | 14.2% | 13.2% | 37.7% | 30.7% | 13.2% | 9.7% | 9.3% | 20.8% | 69.4% | 0.7% | 11.0% |
+| Python Solitito | `2026-05-29T04:45:19.911341Z` | `397a440dd8aa9433` | 955 | 2502.5s | 72.4% | 74.7% | 82.8% | 78.5% | 74.7% | 53.2% | 57.4% | 2.7% | 44.1% | 0.2% | 4.0% |
 
 The target-aware verifier sharply reduces confident wrong accepts compared with the previous open-ended baseline. Solitito substantially improves async backend chord analysis while keeping false accepts below the classical DSP baseline; the browser path still needs a separate real-time accuracy upgrade.

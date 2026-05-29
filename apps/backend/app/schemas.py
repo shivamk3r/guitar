@@ -79,6 +79,11 @@ class RecordingAnalysisSummaryOut(BaseModel):
     target_chord_id: str | None = None
     predicted_chord_id: str | None = None
     confidence: float | None = None
+    attempt_count: int | None = None
+    analyzed_attempt_count: int | None = None
+    accepted_count: int | None = None
+    rejected_count: int | None = None
+    uncertain_count: int | None = None
     completed_at: datetime | None = None
 
 
@@ -136,6 +141,44 @@ class AnalysisCaptureOut(BaseModel):
     capture_end_sec: float | None = None
 
 
+class PracticeAttemptAnalysisOut(BaseModel):
+    id: str | None = None
+    expected_index: int | None = None
+    expected_chord_id: str
+    frontend_detected_chord_id: str | None = None
+    backend_predicted_chord_id: str | None = None
+    verifier_status: str
+    confidence: float | None = None
+    expected_similarity: float | None = None
+    best_alternative_chord_id: str | None = None
+    alternative_similarity: float | None = None
+    margin: float | None = None
+    frontend_score: float | None = None
+    detected_at_beat: float | None = None
+    timing_delta_ms: float | None = None
+    capture_start_sec: float
+    capture_end_sec: float
+    raw_root: str | None = None
+    raw_quality: str | None = None
+    frames_used: int | None = None
+    top_predictions: list[AnalysisTopPredictionOut] = Field(default_factory=list)
+
+
+class PracticeAnalysisOut(BaseModel):
+    mode: str | None = None
+    bpm: float | None = None
+    beats_per_chord: float | None = None
+    count_in_beats: float | None = None
+    attempt_count: int
+    analyzed_attempt_count: int
+    accepted_count: int
+    rejected_count: int
+    uncertain_count: int
+    skipped_count: int
+    average_confidence: float | None = None
+    attempts: list[PracticeAttemptAnalysisOut] = Field(default_factory=list)
+
+
 class RecordingAnalysisOut(BaseModel):
     status: str
     recording_id: str
@@ -146,6 +189,7 @@ class RecordingAnalysisOut(BaseModel):
     target: AnalysisTargetOut
     prediction: AnalysisPredictionOut | None = None
     capture: AnalysisCaptureOut | None = None
+    practice: PracticeAnalysisOut | None = None
     guidance: str | None = None
     error: str | None = None
 

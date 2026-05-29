@@ -15,6 +15,8 @@ from .schemas import (
     AnalysisTopPredictionOut,
     LearnerCreate,
     LearnerOut,
+    PracticeAnalysisOut,
+    PracticeAttemptAnalysisOut,
     ProgressOut,
     RecordingAnalysisOut,
     RecordingAnalysisSummaryOut,
@@ -281,10 +283,15 @@ def build_analysis_summary(recording: models.AudioRecording) -> RecordingAnalysi
     return RecordingAnalysisSummaryOut(
         status=job.status,
         result=result,
-        guidance=job.result.guidance,
+        guidance=analysis_guidance(metrics, job.result.guidance),
         target_chord_id=string_value(metrics.get("expectedChordId")) or session_chord_id(recording),
         predicted_chord_id=string_value(metrics.get("predictedChordId")),
         confidence=float_value(metrics.get("confidence")),
+        attempt_count=nested_int(metrics, "practice", "attemptCount"),
+        analyzed_attempt_count=nested_int(metrics, "practice", "analyzedAttemptCount"),
+        accepted_count=nested_int(metrics, "practice", "acceptedCount"),
+        rejected_count=nested_int(metrics, "practice", "rejectedCount"),
+        uncertain_count=nested_int(metrics, "practice", "uncertainCount"),
         completed_at=job.completed_at or job.result.created_at,
     )
 
@@ -312,6 +319,7 @@ def build_recording_analysis(recording: models.AudioRecording) -> RecordingAnaly
         )
 
     metrics = job.result.metrics or {}
+    practice = analysis_practice(metrics)
     return RecordingAnalysisOut(
         status=job.status,
         recording_id=recording.id,
@@ -322,9 +330,10 @@ def build_recording_analysis(recording: models.AudioRecording) -> RecordingAnaly
         target=AnalysisTargetOut(
             chord_id=string_value(metrics.get("expectedChordId")) or session_chord_id(recording),
         ),
-        prediction=analysis_prediction(metrics),
-        capture=analysis_capture(metrics),
-        guidance=job.result.guidance,
+        prediction=None if practice is not None else analysis_prediction(metrics),
+        capture=None if practice is not None else analysis_capture(metrics),
+        practice=practice,
+        guidance=analysis_guidance(metrics, job.result.guidance),
         error=job.error,
     )
 
@@ -346,6 +355,8 @@ def analysis_result_label(metrics: dict) -> str | None:
     verifier_status = string_value(metrics.get("verifierStatus"))
     if verifier_status:
         return verifier_status
+    if isinstance(metrics.get("practice"), dict):
+        return "analyzed"
     if metrics.get("placeholder") is True:
         return "unavailable"
     return None
@@ -359,6 +370,19 @@ def analysis_status_guidance(job_status: str) -> str:
     if job_status == "failed":
         return "Analysis failed."
     return "Analysis result is not available yet."
+
+
+def analysis_guidance(metrics: dict, fallback: str) -> str:
+    if (
+        metrics.get("placeholder") is True
+        and metrics.get("analysisSkipped") is not True
+        and metrics.get("activity") == "practice_drill"
+    ):
+        return (
+            "Recording captured. Backend chord feedback was not available for this practice drill result. "
+            "New WAV chord practice recordings are analyzed per attempt."
+        )
+    return fallback
 
 
 def analysis_detector(metrics: dict) -> AnalysisDetectorOut | None:
@@ -377,22 +401,6 @@ def analysis_detector(metrics: dict) -> AnalysisDetectorOut | None:
 def analysis_prediction(metrics: dict) -> AnalysisPredictionOut:
     capture = metrics.get("capture")
     top_k = capture.get("topK") if isinstance(capture, dict) else None
-    top_predictions = []
-    if isinstance(top_k, list):
-        for item in top_k:
-            if not isinstance(item, dict):
-                continue
-            confidence = float_value(item.get("confidence"))
-            if confidence is None:
-                continue
-            top_predictions.append(
-                AnalysisTopPredictionOut(
-                    chord_id=string_value(item.get("chordId")),
-                    confidence=confidence,
-                    root=string_value(item.get("root")),
-                    quality=string_value(item.get("quality")),
-                )
-            )
     return AnalysisPredictionOut(
         chord_id=string_value(metrics.get("predictedChordId")),
         verifier_status=string_value(metrics.get("verifierStatus")) or analysis_result_label(metrics),
@@ -401,7 +409,7 @@ def analysis_prediction(metrics: dict) -> AnalysisPredictionOut:
         best_alternative_chord_id=string_value(metrics.get("bestAlternativeChordId")),
         alternative_similarity=float_value(metrics.get("alternativeSimilarity")),
         margin=first_float_value(metrics.get("verifierMargin"), metrics.get("margin")),
-        top_predictions=top_predictions,
+        top_predictions=analysis_top_predictions(top_k),
     )
 
 
@@ -421,6 +429,96 @@ def analysis_capture(metrics: dict) -> AnalysisCaptureOut:
         capture_start_sec=float_value(capture.get("captureStartSec")),
         capture_end_sec=float_value(capture.get("captureEndSec")),
     )
+
+
+def analysis_practice(metrics: dict) -> PracticeAnalysisOut | None:
+    practice = metrics.get("practice")
+    if not isinstance(practice, dict):
+        return None
+
+    attempts = []
+    raw_attempts = practice.get("attempts")
+    if isinstance(raw_attempts, list):
+        for item in raw_attempts:
+            if not isinstance(item, dict):
+                continue
+            expected_chord_id = string_value(item.get("expectedChordId"))
+            verifier_status = string_value(item.get("verifierStatus"))
+            capture_start_sec = float_value(item.get("captureStartSec"))
+            capture_end_sec = float_value(item.get("captureEndSec"))
+            if (
+                expected_chord_id is None
+                or verifier_status is None
+                or capture_start_sec is None
+                or capture_end_sec is None
+            ):
+                continue
+            attempts.append(
+                PracticeAttemptAnalysisOut(
+                    id=string_value(item.get("id")),
+                    expected_index=int_value(item.get("expectedIndex")),
+                    expected_chord_id=expected_chord_id,
+                    frontend_detected_chord_id=string_value(item.get("frontendDetectedChordId")),
+                    backend_predicted_chord_id=string_value(item.get("predictedChordId")),
+                    verifier_status=verifier_status,
+                    confidence=float_value(item.get("confidence")),
+                    expected_similarity=float_value(item.get("expectedSimilarity")),
+                    best_alternative_chord_id=string_value(item.get("bestAlternativeChordId")),
+                    alternative_similarity=float_value(item.get("alternativeSimilarity")),
+                    margin=first_float_value(item.get("verifierMargin"), item.get("margin")),
+                    frontend_score=float_value(item.get("frontendScore")),
+                    detected_at_beat=float_value(item.get("detectedAtBeat")),
+                    timing_delta_ms=float_value(item.get("timingDeltaMs")),
+                    capture_start_sec=capture_start_sec,
+                    capture_end_sec=capture_end_sec,
+                    raw_root=string_value(item.get("rawRoot")),
+                    raw_quality=string_value(item.get("rawQuality")),
+                    frames_used=int_value(item.get("framesUsed")),
+                    top_predictions=analysis_top_predictions(item.get("topK")),
+                )
+            )
+
+    attempt_count = int_value(practice.get("attemptCount"))
+    analyzed_attempt_count = int_value(practice.get("analyzedAttemptCount"))
+    accepted_count = int_value(practice.get("acceptedCount"))
+    rejected_count = int_value(practice.get("rejectedCount"))
+    uncertain_count = int_value(practice.get("uncertainCount"))
+    skipped_count = int_value(practice.get("skippedCount"))
+    return PracticeAnalysisOut(
+        mode=string_value(practice.get("mode")),
+        bpm=float_value(practice.get("bpm")),
+        beats_per_chord=float_value(practice.get("beatsPerChord")),
+        count_in_beats=float_value(practice.get("countInBeats")),
+        attempt_count=attempt_count if attempt_count is not None else len(attempts),
+        analyzed_attempt_count=analyzed_attempt_count if analyzed_attempt_count is not None else len(attempts),
+        accepted_count=accepted_count if accepted_count is not None else 0,
+        rejected_count=rejected_count if rejected_count is not None else 0,
+        uncertain_count=uncertain_count if uncertain_count is not None else 0,
+        skipped_count=skipped_count if skipped_count is not None else 0,
+        average_confidence=float_value(practice.get("averageConfidence")),
+        attempts=attempts,
+    )
+
+
+def analysis_top_predictions(value: object) -> list[AnalysisTopPredictionOut]:
+    top_predictions = []
+    if not isinstance(value, list):
+        return top_predictions
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        confidence = float_value(item.get("confidence"))
+        if confidence is None:
+            continue
+        top_predictions.append(
+            AnalysisTopPredictionOut(
+                chord_id=string_value(item.get("chordId")),
+                confidence=confidence,
+                root=string_value(item.get("root")),
+                quality=string_value(item.get("quality")),
+            )
+        )
+    return top_predictions
 
 
 def duration_seconds(started_at: datetime, ended_at: datetime | None) -> int | None:
@@ -476,6 +574,10 @@ def nested(metadata: dict, parent: str, child: str) -> object:
     if not isinstance(value, dict):
         return None
     return value.get(child)
+
+
+def nested_int(metadata: dict, parent: str, child: str) -> int | None:
+    return int_value(nested(metadata, parent, child))
 
 
 def string_value(value: object) -> str | None:

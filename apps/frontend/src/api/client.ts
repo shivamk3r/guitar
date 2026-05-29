@@ -40,6 +40,11 @@ export interface RecordingAnalysisSummary {
   target_chord_id: string | null;
   predicted_chord_id: string | null;
   confidence: number | null;
+  attempt_count: number | null;
+  analyzed_attempt_count: number | null;
+  accepted_count: number | null;
+  rejected_count: number | null;
+  uncertain_count: number | null;
   completed_at: string | null;
 }
 
@@ -53,6 +58,7 @@ export interface RecordingAnalysis {
   target: AnalysisTarget;
   prediction: AnalysisPrediction | null;
   capture: AnalysisCapture | null;
+  practice: PracticeAnalysis | null;
   guidance: string | null;
   error: string | null;
 }
@@ -97,6 +103,44 @@ export interface AnalysisCapture {
   frames_used: number | null;
   capture_start_sec: number | null;
   capture_end_sec: number | null;
+}
+
+export interface PracticeAnalysis {
+  mode: string | null;
+  bpm: number | null;
+  beats_per_chord: number | null;
+  count_in_beats: number | null;
+  attempt_count: number;
+  analyzed_attempt_count: number;
+  accepted_count: number;
+  rejected_count: number;
+  uncertain_count: number;
+  skipped_count: number;
+  average_confidence: number | null;
+  attempts: PracticeAttemptAnalysis[];
+}
+
+export interface PracticeAttemptAnalysis {
+  id: string | null;
+  expected_index: number | null;
+  expected_chord_id: string;
+  frontend_detected_chord_id: string | null;
+  backend_predicted_chord_id: string | null;
+  verifier_status: string;
+  confidence: number | null;
+  expected_similarity: number | null;
+  best_alternative_chord_id: string | null;
+  alternative_similarity: number | null;
+  margin: number | null;
+  frontend_score: number | null;
+  detected_at_beat: number | null;
+  timing_delta_ms: number | null;
+  capture_start_sec: number;
+  capture_end_sec: number;
+  raw_root: string | null;
+  raw_quality: string | null;
+  frames_used: number | null;
+  top_predictions: AnalysisTopPrediction[];
 }
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7654").replace(

@@ -39,8 +39,8 @@ guitar/
 
 - **Worker (`apps/backend/app/worker.py`)**
   - Polls SQS, loads job/recording metadata, runs asynchronous analysis, and writes results.
-  - Runs the pinned Solitito ONNX detector for consented WAV `chord_check` recordings.
-  - Writes placeholder metrics for other activity types until deeper extraction is implemented.
+  - Runs the pinned Solitito ONNX detector for consented WAV `chord_check` recordings and supported `practice_drill` chord attempts.
+  - Writes placeholder metrics for activity types whose deeper extraction is not implemented yet.
 
 - **Python chord eval bench (`apps/backend/app/evals/chord_detection`)**
   - Reads the same prepared `.eval-cache/chord-detection` datasets as the frontend eval CLI.
@@ -76,6 +76,7 @@ Initial v1 endpoints:
 - `GET /v1/learners/{learner_id}/history`
 - `GET /v1/sessions/{session_id}`
 - `GET /v1/recordings/{recording_id}/media`
+- `GET /v1/recordings/{recording_id}/analysis`
 - `GET /v1/learners/{learner_id}/progress`
 
 The API uses anonymous learner profiles for now. Account auth is a later milestone.
@@ -92,7 +93,7 @@ The API uses anonymous learner profiles for now. Account auth is a later milesto
 8. When the session stops, the frontend closes the backend session with result metadata such as tuning completion, scores, score breakdowns, and attempts.
 9. For consented recordings only, the frontend uploads the recorded audio blob to the API.
 10. API stores metadata in Postgres, stores consented audio in MinIO, and enqueues an SQS analysis job for saved recordings.
-11. Worker consumes the job and writes `AnalysisResult` rows.
+11. Worker consumes the job and writes `AnalysisResult` rows. Chord checks are analyzed as one target chord; supported practice drills are segmented by saved BPM/timing metadata and analyzed per attempt.
 12. History responses include per-recording analysis summaries, and `GET /v1/recordings/{recording_id}/analysis` exposes detailed learner-facing feedback.
 13. History and progress endpoints use session and analysis history to guide the learner.
 

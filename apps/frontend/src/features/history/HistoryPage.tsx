@@ -1,4 +1,6 @@
 import {
+  type PracticeAnalysis,
+  type PracticeAttemptAnalysis,
   type RecordingAnalysis,
   type RecordingAnalysisSummary,
   type RecordingSummary,
@@ -417,6 +419,7 @@ function RecordingAnalysisDetail({ analysis }: { analysis: RecordingAnalysis }) 
           </div>
         ))}
       </dl>
+      {analysis.practice && <PracticeAnalysisDetail practice={analysis.practice} />}
       {topPredictions.length > 0 && (
         <div>
           <div className="text-muted mb-2">Top model estimates</div>
@@ -438,7 +441,65 @@ function RecordingAnalysisDetail({ analysis }: { analysis: RecordingAnalysis }) 
   );
 }
 
+function PracticeAnalysisDetail({ practice }: { practice: PracticeAnalysis }) {
+  if (practice.attempts.length === 0) return null;
+  return (
+    <div>
+      <div className="text-muted mb-2">Backend attempt feedback</div>
+      <div className="max-h-96 overflow-auto rounded border border-white/10">
+        <table className="w-full min-w-[680px] text-left text-xs">
+          <thead className="sticky top-0 bg-panel text-muted">
+            <tr>
+              <th className="px-3 py-2 font-medium">#</th>
+              <th className="px-3 py-2 font-medium">Expected</th>
+              <th className="px-3 py-2 font-medium">Backend heard</th>
+              <th className="px-3 py-2 font-medium">Result</th>
+              <th className="px-3 py-2 font-medium">Confidence</th>
+              <th className="px-3 py-2 font-medium">Frontend</th>
+              <th className="px-3 py-2 font-medium">Window</th>
+              <th className="px-3 py-2 font-medium">Top estimates</th>
+            </tr>
+          </thead>
+          <tbody>
+            {practice.attempts.map((attempt, index) => (
+              <PracticeAttemptRow
+                key={attempt.id ?? `${attempt.expected_index}-${index}`}
+                attempt={attempt}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function PracticeAttemptRow({ attempt }: { attempt: PracticeAttemptAnalysis }) {
+  return (
+    <tr className="border-t border-white/10 align-top">
+      <td className="px-3 py-2 tabular-nums">{attemptNumber(attempt)}</td>
+      <td className="px-3 py-2 font-medium text-ink">{attempt.expected_chord_id}</td>
+      <td className="px-3 py-2">{attempt.backend_predicted_chord_id ?? "Unknown"}</td>
+      <td className="px-3 py-2">{analysisResultLabel(attempt.verifier_status) ?? "Unknown"}</td>
+      <td className="px-3 py-2 tabular-nums">{percentOrUndefined(attempt.confidence) ?? "-"}</td>
+      <td className="px-3 py-2">
+        {frontendAttemptLabel(attempt)}
+        {attempt.timing_delta_ms != null && (
+          <div className="mt-0.5 text-muted tabular-nums">
+            {Math.round(attempt.timing_delta_ms)} ms
+          </div>
+        )}
+      </td>
+      <td className="px-3 py-2 tabular-nums">
+        {attempt.capture_start_sec.toFixed(2)}-{attempt.capture_end_sec.toFixed(2)}s
+      </td>
+      <td className="px-3 py-2">{topPredictionLabel(attempt.top_predictions)}</td>
+    </tr>
+  );
+}
+
 function analysisDetailRows(analysis: RecordingAnalysis): { label: string; value: string }[] {
+  if (analysis.practice) return practiceDetailRows(analysis);
   const prediction = analysis.prediction;
   const capture = analysis.capture;
   const rows: { label: string; value: string }[] = [];
@@ -461,6 +522,30 @@ function analysisDetailRows(analysis: RecordingAnalysis): { label: string; value
   return rows;
 }
 
+function practiceDetailRows(analysis: RecordingAnalysis): { label: string; value: string }[] {
+  const practice = analysis.practice;
+  const rows: { label: string; value: string }[] = [];
+  if (!practice) return rows;
+  addAnalysisRow(rows, "Result", analysisResultLabel(analysisResultValue(analysis)));
+  addAnalysisRow(rows, "Mode", practiceModeLabel(practice.mode));
+  addAnalysisRow(
+    rows,
+    "Attempts analyzed",
+    `${practice.analyzed_attempt_count}/${practice.attempt_count}`,
+  );
+  addAnalysisRow(
+    rows,
+    "Backend accepted",
+    `${practice.accepted_count} accepted · ${practice.rejected_count} rejected · ${practice.uncertain_count} uncertain`,
+  );
+  addAnalysisRow(rows, "Average confidence", percentOrUndefined(practice.average_confidence));
+  addAnalysisRow(rows, "BPM", numberOrUndefined(practice.bpm));
+  addAnalysisRow(rows, "Beats per chord", numberOrUndefined(practice.beats_per_chord));
+  addAnalysisRow(rows, "Count-in", numberOrUndefined(practice.count_in_beats));
+  addAnalysisRow(rows, "Model", analysis.detector?.name);
+  return rows;
+}
+
 function addAnalysisRow(
   rows: { label: string; value: string }[],
   label: string,
@@ -470,10 +555,49 @@ function addAnalysisRow(
   rows.push({ label, value });
 }
 
+function analysisResultValue(analysis: RecordingAnalysis): string {
+  if (analysis.practice) return "analyzed";
+  return analysis.prediction?.verifier_status ?? analysis.status;
+}
+
+function attemptNumber(attempt: PracticeAttemptAnalysis): string {
+  return attempt.expected_index == null ? "-" : String(attempt.expected_index + 1);
+}
+
+function frontendAttemptLabel(attempt: PracticeAttemptAnalysis): string {
+  const detected = attempt.frontend_detected_chord_id ?? "not detected";
+  const score = attempt.frontend_score == null ? "" : ` · ${attempt.frontend_score}/10`;
+  return `${detected}${score}`;
+}
+
+function topPredictionLabel(items: PracticeAttemptAnalysis["top_predictions"]): string {
+  if (items.length === 0) return "-";
+  return items
+    .slice(0, 3)
+    .map((item) => `${item.chord_id ?? "Unknown"} ${percent(item.confidence)}`)
+    .join(", ");
+}
+
+function practiceModeLabel(value: string | null): string | undefined {
+  if (!value) return undefined;
+  if (value === "timed_chord_practice") return "Timed chord practice";
+  if (value === "chord_change_drill") return "Chord change drill";
+  if (value === "progression_drill") return "Progression drill";
+  return completionLabel(value);
+}
+
 function analysisResultText(summary: RecordingAnalysisSummary): string {
   if (summary.status === "queued" || summary.status === "running")
     return "Backend analysis pending";
   if (summary.status === "failed") return "Backend analysis failed";
+  if (summary.result === "analyzed") {
+    if (summary.attempt_count == null) return "Backend practice analysis complete";
+    const analyzed = summary.analyzed_attempt_count ?? summary.attempt_count;
+    const accepted = summary.accepted_count ?? 0;
+    const rejected = summary.rejected_count ?? 0;
+    const uncertain = summary.uncertain_count ?? 0;
+    return `Backend analyzed ${analyzed}/${summary.attempt_count} attempts · ${accepted} accepted, ${rejected} rejected, ${uncertain} uncertain`;
+  }
   if (summary.result === "accepted") {
     const chord = summary.target_chord_id ?? summary.predicted_chord_id;
     return chord ? `Accepted ${chord}` : "Accepted";
@@ -485,7 +609,7 @@ function analysisResultText(summary: RecordingAnalysisSummary): string {
   }
   if (summary.result === "uncertain") return "Backend result inconclusive";
   if (summary.result === "skipped") return summary.guidance ?? "Backend analysis skipped";
-  if (summary.result === "unavailable") return "Backend analysis unavailable";
+  if (summary.result === "unavailable") return summary.guidance ?? "Backend analysis unavailable";
   return summary.guidance ?? "Backend analysis not available";
 }
 
@@ -501,7 +625,9 @@ function analysisStatusClass(summary: RecordingAnalysisSummary): string {
   if (summary.status === "failed" || summary.result === "rejected") {
     return "bg-bad/10 text-bad border border-bad/30";
   }
-  if (summary.result === "accepted") return "bg-accent/10 text-accent border border-accent/30";
+  if (summary.result === "accepted" || summary.result === "analyzed") {
+    return "bg-accent/10 text-accent border border-accent/30";
+  }
   if (summary.status === "queued" || summary.status === "running") {
     return "bg-accent/10 text-accent border border-accent/30";
   }

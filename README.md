@@ -84,7 +84,7 @@ pnpm eval:chords -- --force
 
 Datasets, Solitito model assets, and per-sample results are cached in `.eval-cache/chord-detection/`, which is ignored by git. Latest reports are written under `.eval-cache/chord-detection/reports/{frontend,python,python-solitito,comparison}/`; see [apps/frontend/evals/chord-detection/README.md](apps/frontend/evals/chord-detection/README.md) for details.
 
-Current full target-aware + WCSR evals, generated 2026-05-29 IST:
+Current full target-aware + WCSR evals, generated 2026-05-29 10:11-10:15 IST:
 
 | Implementation | Evaluated | Duration | Top-1 accuracy | Exact WCSR | Root WCSR | Maj-Min WCSR | Verifier recall | Verifier weighted recall | False accept trials | Wrong-accept samples |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -98,7 +98,7 @@ Realtime feedback stays in the browser. Recording upload is only enabled after e
 
 ## Status
 
-Work-in-progress platform scaffold. The worker runs Solitito ONNX chord analysis for consented WAV `chord_check` recordings and keeps placeholder analysis for other activity types.
+Work-in-progress platform scaffold. The worker runs Solitito ONNX chord analysis for consented WAV `chord_check` recordings and supported `practice_drill` chord attempts, and keeps placeholder analysis for activity types whose deeper analysis is not implemented yet.
 
 ## License
 

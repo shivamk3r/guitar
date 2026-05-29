@@ -61,7 +61,7 @@ python3 -m pytest
 ## Rules
 
 - Immediate musical feedback stays browser-side for latency.
-- Backend async `chord_check` WAV analysis uses the pinned Solitito ONNX detector.
+- Backend async WAV analysis for `chord_check` and supported `practice_drill` chord attempts uses the pinned Solitito ONNX detector.
 - Recording/upload requires explicit learner consent.
 - The frontend uploads recordings through the API, not directly to MinIO.
 - Audio bytes go to object storage; metadata goes to Postgres.
