@@ -16,6 +16,8 @@ from app.evals.chord_detection.dsp import (
     decode_wav_file,
     verify_chord,
 )
+from app.evals.chord_detection.metrics import compute_metrics
+from app.evals.chord_detection.wcsr import compare_wcsr_variant
 
 
 def test_python_chord_catalog_matches_frontend_ids() -> None:
@@ -76,7 +78,50 @@ def test_python_cli_writes_report_schema_for_fixture(tmp_path: Path) -> None:
     report_path = cache_root / "reports" / "python" / "latest.json"
     assert "Python chord detection eval complete" in completed.stdout
     assert report_path.exists()
-    assert '"implementation": "python"' in report_path.read_text()
+    report_text = report_path.read_text()
+    assert '"implementation": "python"' in report_text
+    assert '"wcsr"' in report_text
+
+
+def test_python_metrics_duration_weight_wcsr() -> None:
+    metrics = compute_metrics(
+        [
+            result("long", "A", "A", "accepted", 9),
+            result("short", "D", "A", "rejected", 1),
+        ]
+    )
+
+    summary = metrics["summary"]
+    assert summary["accuracy"] == 0.5
+    assert summary["verifierRecall"] == 0.5
+    assert summary["totalDurationSec"] == 10
+    assert summary["wcsr"]["exact"]["score"] == 0.9
+    assert summary["verifierWeightedRecall"] == 0.9
+
+
+def test_python_metrics_exclude_wcsr_out_of_gamut_duration() -> None:
+    metrics = compute_metrics(
+        [
+            result("power", "E5", "E5", "accepted", 2),
+            result("major", "A", "A", "accepted", 3),
+        ]
+    )
+
+    summary = metrics["summary"]
+    assert summary["wcsr"]["exact"]["score"] == 1
+    assert summary["wcsr"]["majmin"]["score"] == 1
+    assert summary["wcsr"]["majmin"]["validDurationSec"] == 3
+    assert summary["wcsr"]["majmin"]["outOfGamutDurationSec"] == 2
+    assert summary["wcsr"]["mirex"]["outOfGamutDurationSec"] == 2
+
+
+def test_python_wcsr_compares_representative_mir_vocabularies() -> None:
+    assert compare_wcsr_variant("A7", "Am", "root") == 1
+    assert compare_wcsr_variant("A7", "A", "thirds") == 1
+    assert compare_wcsr_variant("A7", "A", "triads") == 1
+    assert compare_wcsr_variant("A7", "A", "tetrads") == 0
+    assert compare_wcsr_variant("A7", "A7", "sevenths") == 1
+    assert compare_wcsr_variant("E5", "E", "mirex") == -1
 
 
 def synth_strum(midis: tuple[int | None, ...], sample_rate: int = 48_000, seconds: float = 1.0) -> np.ndarray:
@@ -97,3 +142,33 @@ def synth_strum(midis: tuple[int | None, ...], sample_rate: int = 48_000, second
         offset += 0.005
     peak = np.max(np.abs(output))
     return output / peak * 0.8 if peak > 0 else output
+
+
+def result(sample_id: str, expected: str, predicted: str | None, verifier_status: str, duration_sec: float) -> dict:
+    return {
+        "status": "evaluated",
+        "cacheStatus": "miss",
+        "datasetId": "isolated-guitar-chords",
+        "sampleId": sample_id,
+        "expectedChordId": expected,
+        "evaluationStartSec": 0,
+        "evaluationEndSec": duration_sec,
+        "durationSec": duration_sec,
+        "predictedChordId": predicted,
+        "similarity": 0.8 if predicted else 0,
+        "runnerUpChordId": None,
+        "runnerUpSimilarity": None,
+        "margin": 0.1,
+        "correct": predicted == expected,
+        "sameFamily": False,
+        "verifierStatus": verifier_status,
+        "acceptedChordId": expected if verifier_status == "accepted" else None,
+        "bestAlternativeChordId": None,
+        "expectedSimilarity": 0.8 if verifier_status == "accepted" else 0.4,
+        "alternativeSimilarity": None,
+        "verifierMargin": 0.1,
+        "confidence": 0.8 if verifier_status == "accepted" else 0.2,
+        "negativeTrials": [],
+        "capture": {},
+        "metadata": {},
+    }

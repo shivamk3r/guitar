@@ -1,7 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ensureDir } from "./fs-utils";
-import type { EvalReport, MetricsReport } from "./types";
+import { type EvalReport, type MetricsReport, WCSR_VARIANT_IDS, type WcsrVariantId } from "./types";
 
 export async function writeReports(
   cacheRoot: string,
@@ -48,6 +48,10 @@ export function renderMarkdownReport(report: EvalReport): string {
     "## Headline",
     "",
     renderMetricsTable([["overall", report.summary], ...datasetRows(report)]),
+    "",
+    "## WCSR",
+    "",
+    renderWcsrTable(report.summary),
     "",
     "## Per-Chord Verifier",
     "",
@@ -103,15 +107,32 @@ function datasetRows(report: EvalReport): Array<[string, MetricsReport]> {
 
 function renderMetricsTable(rows: Array<[string, MetricsReport]>): string {
   return [
-    "| Scope | Evaluated | Top-1 accuracy | Verifier recall | Positive rejected | Uncertain | False accept trials | Wrong-accept samples |",
-    "|---|---:|---:|---:|---:|---:|---:|---:|",
+    "| Scope | Evaluated | Duration | Top-1 accuracy | Exact WCSR | Root WCSR | Maj-Min WCSR | Sevenths WCSR | Verifier recall | Verifier weighted recall | Positive rejected | Uncertain | False accept trials | Wrong-accept samples |",
+    "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ...rows.map(([label, metrics]) => {
       const summary = metrics.summary;
-      return `| ${label} | ${summary.evaluated} | ${pct(summary.accuracy)} | ${pct(
-        summary.verifierRecall,
+      return `| ${label} | ${summary.evaluated} | ${seconds(summary.totalDurationSec)} | ${pct(
+        summary.accuracy,
+      )} | ${pct(summary.wcsr.exact.score)} | ${pct(summary.wcsr.root.score)} | ${pct(
+        summary.wcsr.majmin.score,
+      )} | ${pct(summary.wcsr.sevenths.score)} | ${pct(summary.verifierRecall)} | ${pct(
+        summary.verifierWeightedRecall,
       )} | ${pct(summary.rejectedRate)} | ${pct(summary.unknownRate)} | ${pct(
         summary.falseAcceptRate,
       )} | ${pct(summary.wrongAcceptedRate)} |`;
+    }),
+  ].join("\n");
+}
+
+function renderWcsrTable(metrics: MetricsReport): string {
+  return [
+    "| Variant | Score | Valid duration | Correct duration | Out-of-gamut duration |",
+    "|---|---:|---:|---:|---:|",
+    ...WCSR_VARIANT_IDS.map((variant) => {
+      const item = metrics.summary.wcsr[variant];
+      return `| ${wcsrLabel(variant)} | ${pct(item.score)} | ${seconds(
+        item.validDurationSec,
+      )} | ${seconds(item.correctDurationSec)} | ${seconds(item.outOfGamutDurationSec)} |`;
     }),
   ].join("\n");
 }
@@ -156,4 +177,27 @@ function renderSkips(report: EvalReport): string {
 
 function pct(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
+}
+
+function seconds(value: number): string {
+  return `${value.toFixed(1)}s`;
+}
+
+function wcsrLabel(variant: WcsrVariantId): string {
+  const labels: Record<WcsrVariantId, string> = {
+    exact: "Exact",
+    root: "Root",
+    mirex: "MIREX",
+    thirds: "Thirds",
+    thirdsInv: "Thirds + bass",
+    triads: "Triads",
+    triadsInv: "Triads + bass",
+    tetrads: "Tetrads",
+    tetradsInv: "Tetrads + bass",
+    majmin: "Maj-Min",
+    majminInv: "Maj-Min + bass",
+    sevenths: "Sevenths",
+    seventhsInv: "Sevenths + bass",
+  };
+  return labels[variant];
 }

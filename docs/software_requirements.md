@@ -94,14 +94,14 @@ The product closes the loop between "I played something" and "what should I do n
 
 The current chord detector is measured with the manual offline eval harness in `apps/frontend/evals/chord-detection`. The browser detector is the real-time production path; the Python implementation is an eval-only research bench that reads the same prepared datasets and report schema.
 
-Latest full target-aware evals were generated 2026-05-29 IST:
+Latest full target-aware + WCSR evals were generated 2026-05-29 IST:
 
-| Implementation | Timestamp | Fingerprint | Evaluated | Top-1 accuracy | Verifier recall | False accept trials | Wrong-accept samples | Uncertain |
-| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Frontend | `2026-05-28T23:08:22.140Z` | `b2bc7dcc3144d973` | 955 | 14.3% | 10.1% | 0.7% | 11.8% | 69.2% |
-| Python | `2026-05-28T23:13:33.957028Z` | `8f17959faef3430b` | 955 | 14.2% | 9.7% | 0.7% | 11.0% | 69.4% |
+| Implementation | Timestamp | Fingerprint | Evaluated | Duration | Top-1 accuracy | Exact WCSR | Root WCSR | Maj-Min WCSR | Verifier recall | Verifier weighted recall | False accept trials | Wrong-accept samples | Uncertain |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Frontend | `2026-05-29T02:22:56.256Z` | `42dbecafd82639db` | 955 | 2502.5s | 14.3% | 13.3% | 37.3% | 30.5% | 10.1% | 9.5% | 0.7% | 11.8% | 69.2% |
+| Python | `2026-05-29T02:23:36.655861Z` | `7465ce0d02de1557` | 955 | 2502.5s | 14.2% | 13.2% | 37.7% | 30.7% | 9.7% | 9.3% | 0.7% | 11.0% | 69.4% |
 
-This is still below the long-term **NFR-2** accuracy target. The current v1 verifier intentionally trades recall for fewer confident wrong accepts: `accepted` is scored as correct for the target chord, `rejected` is scored as wrong using the best alternative, and `uncertain` avoids awarding or confidently penalizing a chord identity when evidence is ambiguous. Future detection work should continue to optimize target-aware verifier recall under a low false-accept budget rather than only improving open-ended top-1 recognizer accuracy.
+This is still below the long-term **NFR-2** accuracy target. The current v1 verifier intentionally trades recall for fewer confident wrong accepts: `accepted` is scored as correct for the target chord, `rejected` is scored as wrong using the best alternative, and `uncertain` avoids awarding or confidently penalizing a chord identity when evidence is ambiguous. WCSR is duration-weighted and helps compare against MIR literature, while verifier recall remains the learner-facing trust metric. Future detection work should continue to optimize target-aware verifier recall under a low false-accept budget rather than only improving open-ended top-1 recognizer accuracy.
 
 ## 6. Audio and Analysis Requirements
 

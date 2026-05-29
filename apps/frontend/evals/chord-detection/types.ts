@@ -1,6 +1,6 @@
 import type { ChordVerifierStatus } from "../../src/audio/chord-detection";
 
-export const EVAL_VERSION = "chord-detection-eval-v2-target-aware";
+export const EVAL_VERSION = "chord-detection-eval-v3-wcsr";
 
 export const CAPTURE_CONFIG = {
   fftSize: 2048,
@@ -78,6 +78,9 @@ export interface EvaluatedSampleResult {
   datasetId: DatasetId;
   sampleId: string;
   expectedChordId: string;
+  evaluationStartSec: number;
+  evaluationEndSec: number;
+  durationSec: number;
   predictedChordId: string | null;
   similarity: number;
   runnerUpChordId: string | null;
@@ -122,16 +125,19 @@ export interface PerChordMetrics {
 export interface MetricsSummary {
   evaluated: number;
   failed: number;
+  totalDurationSec: number;
   negativeTrials: number;
   falseAccepts: number;
   wrongAcceptedSamples: number;
   accuracy: number;
   verifierRecall: number;
+  verifierWeightedRecall: number;
   falseRejectRate: number;
   falseAcceptRate: number;
   wrongAcceptedRate: number;
   unknownRate: number;
   rejectedRate: number;
+  wcsr: WcsrMetrics;
 }
 
 export interface MetricsReport {
@@ -139,6 +145,33 @@ export interface MetricsReport {
   perChord: PerChordMetrics[];
   confusionMatrix: Record<string, Record<string, number>>;
 }
+
+export const WCSR_VARIANT_IDS = [
+  "exact",
+  "root",
+  "mirex",
+  "thirds",
+  "thirdsInv",
+  "triads",
+  "triadsInv",
+  "tetrads",
+  "tetradsInv",
+  "majmin",
+  "majminInv",
+  "sevenths",
+  "seventhsInv",
+] as const;
+
+export type WcsrVariantId = (typeof WCSR_VARIANT_IDS)[number];
+
+export interface WcsrVariantMetrics {
+  score: number;
+  correctDurationSec: number;
+  validDurationSec: number;
+  outOfGamutDurationSec: number;
+}
+
+export type WcsrMetrics = Record<WcsrVariantId, WcsrVariantMetrics>;
 
 export interface EvalReport {
   implementation: "frontend" | "python";

@@ -6,6 +6,7 @@ import type {
   PerChordMetrics,
   SampleResult,
 } from "./types";
+import { computeDurationWeightedMetrics } from "./wcsr";
 
 export function computeMetrics(results: readonly SampleResult[]): MetricsReport {
   const evaluated = results.filter(
@@ -56,20 +57,24 @@ export function computeMetrics(results: readonly SampleResult[]): MetricsReport 
   }
 
   const evaluatedCount = evaluated.length;
+  const weighted = computeDurationWeightedMetrics(evaluated);
   return {
     summary: {
       evaluated: evaluatedCount,
       failed,
+      totalDurationSec: weighted.totalDurationSec,
       negativeTrials,
       falseAccepts,
       wrongAcceptedSamples,
       accuracy: safeDivide(topOneCorrect, evaluatedCount),
       verifierRecall: safeDivide(positiveAccepted, evaluatedCount),
+      verifierWeightedRecall: weighted.verifierWeightedRecall,
       falseRejectRate: safeDivide(evaluatedCount - positiveAccepted, evaluatedCount),
       falseAcceptRate: safeDivide(falseAccepts, negativeTrials),
       wrongAcceptedRate: safeDivide(wrongAcceptedSamples, evaluatedCount),
       unknownRate: safeDivide(positiveUncertain, evaluatedCount),
       rejectedRate: safeDivide(positiveRejected, evaluatedCount),
+      wcsr: weighted.wcsr,
     },
     perChord: [...perChord.values()]
       .filter((item) => item.support > 0 || item.predicted > 0)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .catalog import SUPPORTED_CHORD_ID_LIST
+from .wcsr import compute_duration_weighted_metrics
 
 
 def compute_metrics(results: list[dict]) -> dict:
@@ -47,20 +48,24 @@ def compute_metrics(results: list[dict]) -> dict:
             ensure_chord(per_chord, trial["expectedChordId"])["predicted"] += 1
 
     evaluated_count = len(evaluated)
+    weighted = compute_duration_weighted_metrics(evaluated)
     return {
         "summary": {
             "evaluated": evaluated_count,
             "failed": failed,
+            "totalDurationSec": weighted["totalDurationSec"],
             "negativeTrials": negative_trials,
             "falseAccepts": false_accepts,
             "wrongAcceptedSamples": wrong_accepted_samples,
             "accuracy": safe_divide(top_one_correct, evaluated_count),
             "verifierRecall": safe_divide(positive_accepted, evaluated_count),
+            "verifierWeightedRecall": weighted["verifierWeightedRecall"],
             "falseRejectRate": safe_divide(evaluated_count - positive_accepted, evaluated_count),
             "falseAcceptRate": safe_divide(false_accepts, negative_trials),
             "wrongAcceptedRate": safe_divide(wrong_accepted_samples, evaluated_count),
             "unknownRate": safe_divide(positive_uncertain, evaluated_count),
             "rejectedRate": safe_divide(positive_rejected, evaluated_count),
+            "wcsr": weighted["wcsr"],
         },
         "perChord": [to_per_chord_metrics(item) for item in per_chord.values() if item["support"] > 0 or item["predicted"] > 0],
         "confusionMatrix": confusion_matrix,

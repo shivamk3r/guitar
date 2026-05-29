@@ -5,7 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-EVAL_VERSION = "chord-detection-eval-v2-target-aware"
+EVAL_VERSION = "chord-detection-eval-v3-wcsr"
 
 CAPTURE_CONFIG: dict[str, float | int] = {
     "fftSize": 2048,

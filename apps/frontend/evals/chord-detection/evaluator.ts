@@ -48,6 +48,7 @@ async function evaluateSample(
       Number.isFinite(sample.endSec) && sample.endSec > sample.startSec
         ? sample.endSec
         : audio.samples.length / audio.sampleRate;
+    const durationSec = Math.max(0, endSec - sample.startSec);
     const capture = analyzeChordCapture(audio, sample.startSec, endSec);
     const expected = CHORDS_BY_ID[sample.expectedChordId];
     if (!expected) throw new Error(`unknown expected chord: ${sample.expectedChordId}`);
@@ -74,6 +75,9 @@ async function evaluateSample(
       datasetId: sample.datasetId,
       sampleId: sample.id,
       expectedChordId: sample.expectedChordId,
+      evaluationStartSec: sample.startSec,
+      evaluationEndSec: endSec,
+      durationSec,
       predictedChordId,
       similarity,
       runnerUpChordId,

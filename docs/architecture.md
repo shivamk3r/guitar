@@ -111,7 +111,7 @@ Persistent Docker volumes keep Postgres, MinIO, and LocalStack state across rest
 
 - **Frontend unit tests:** Vitest for DSP, scoring, stores, glossary data, and components.
 - **Frontend e2e:** Playwright with fake media devices.
-- **Chord detection evals:** Manual target-aware eval harnesses against cached public labelled guitar datasets. Run the browser production path with `pnpm eval:chords` or `pnpm eval:chords:frontend`, run the Python research bench with `pnpm eval:chords:python`, and generate side-by-side reports with `pnpm eval:chords:compare`. Outputs live under `.eval-cache/chord-detection/reports/{frontend,python,comparison}/`.
+- **Chord detection evals:** Manual target-aware + WCSR eval harnesses against cached public labelled guitar datasets. Run the browser production path with `pnpm eval:chords` or `pnpm eval:chords:frontend`, run the Python research bench with `pnpm eval:chords:python`, and generate side-by-side reports with `pnpm eval:chords:compare`. Outputs live under `.eval-cache/chord-detection/reports/{frontend,python,comparison}/`.
 - **Backend unit/API tests:** Pytest with SQLite and fake storage/queue dependencies.
 - **Compose smoke:** `docker compose config`, `docker compose up --build`, `/health`, and a recording-upload path.
 

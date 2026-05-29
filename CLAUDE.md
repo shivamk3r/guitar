@@ -19,7 +19,7 @@ If implementation and docs disagree, update the docs in the same change.
 
 - Frontend: Vite, React 18, TypeScript strict, Tailwind, Zustand, IndexedDB, Web Audio, AudioWorklet.
 - Backend: FastAPI, SQLAlchemy, Postgres, MinIO, LocalStack SQS, Python worker.
-- Tests/evals: Vitest, Playwright, Pytest, manual chord detection evals for frontend and Python research bench.
+- Tests/evals: Vitest, Playwright, Pytest, manual target-aware + WCSR chord detection evals for frontend and Python research bench.
 - Tooling: pnpm workspace, Biome, Docker Compose.
 
 ## Layout

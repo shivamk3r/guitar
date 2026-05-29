@@ -163,8 +163,14 @@ function printSummary(report: EvalReport, markdownPath: string): void {
   console.log("");
   console.log("Chord detection eval complete");
   console.log(`Evaluated: ${summary.evaluated}`);
+  console.log(`Duration: ${summary.totalDurationSec.toFixed(1)}s`);
   console.log(`Top-1 accuracy: ${pct(summary.accuracy)}`);
+  console.log(`Exact WCSR: ${pct(summary.wcsr.exact.score)}`);
+  console.log(`Root WCSR: ${pct(summary.wcsr.root.score)}`);
+  console.log(`Maj-Min WCSR: ${pct(summary.wcsr.majmin.score)}`);
+  console.log(`Sevenths WCSR: ${pct(summary.wcsr.sevenths.score)}`);
   console.log(`Verifier recall: ${pct(summary.verifierRecall)}`);
+  console.log(`Verifier weighted recall: ${pct(summary.verifierWeightedRecall)}`);
   console.log(`False accept trials: ${pct(summary.falseAcceptRate)}`);
   console.log(`Wrong-accept samples: ${pct(summary.wrongAcceptedRate)}`);
   console.log(`Uncertain: ${pct(summary.unknownRate)}`);

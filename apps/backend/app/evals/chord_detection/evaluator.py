@@ -45,6 +45,7 @@ def evaluate_sample(sample: dict[str, Any], audio) -> dict:
             if math.isfinite(sample["endSec"]) and sample["endSec"] > sample["startSec"]
             else len(audio.samples) / audio.sample_rate
         )
+        duration_sec = max(0.0, end_sec - sample["startSec"])
         capture = analyze_chord_capture(audio, sample["startSec"], end_sec)
         expected = CHORDS_BY_ID[sample["expectedChordId"]]
         captured_chroma = capture["chroma"]
@@ -79,6 +80,9 @@ def evaluate_sample(sample: dict[str, Any], audio) -> dict:
             "datasetId": sample["datasetId"],
             "sampleId": sample["id"],
             "expectedChordId": sample["expectedChordId"],
+            "evaluationStartSec": sample["startSec"],
+            "evaluationEndSec": end_sec,
+            "durationSec": duration_sec,
             "predictedChordId": predicted_chord.id if predicted_chord else None,
             "similarity": similarity,
             "runnerUpChordId": runner_up_chord.id if runner_up_chord else None,

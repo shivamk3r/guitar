@@ -82,12 +82,12 @@ pnpm eval:chords -- --force
 
 Datasets and per-sample results are cached in `.eval-cache/chord-detection/`, which is ignored by git. Latest reports are written under `.eval-cache/chord-detection/reports/{frontend,python,comparison}/`; see [apps/frontend/evals/chord-detection/README.md](apps/frontend/evals/chord-detection/README.md) for details.
 
-Current full target-aware evals, generated 2026-05-29 IST:
+Current full target-aware + WCSR evals, generated 2026-05-29 IST:
 
-| Implementation | Evaluated | Top-1 accuracy | Verifier recall | False accept trials | Wrong-accept samples |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Frontend `b2bc7dcc3144d973` | 955 | 14.3% | 10.1% | 0.7% | 11.8% |
-| Python `8f17959faef3430b` | 955 | 14.2% | 9.7% | 0.7% | 11.0% |
+| Implementation | Evaluated | Duration | Top-1 accuracy | Exact WCSR | Root WCSR | Maj-Min WCSR | Verifier recall | Verifier weighted recall | False accept trials | Wrong-accept samples |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Frontend `42dbecafd82639db` | 955 | 2502.5s | 14.3% | 13.3% | 37.3% | 30.5% | 10.1% | 9.5% | 0.7% | 11.8% |
+| Python `7465ce0d02de1557` | 955 | 2502.5s | 14.2% | 13.2% | 37.7% | 30.7% | 9.7% | 9.3% | 0.7% | 11.0% |
 
 ## Privacy and Consent
 

@@ -48,16 +48,19 @@ Reports are target-aware. Every evaluated sample is tested once against the true
 - `False accept trials`: negative target trials that were accepted.
 - `Wrong-accept samples`: samples with at least one accepted negative target.
 - `Top-1 accuracy`: open-ended debug matcher accuracy, not the learner scoring contract.
+- `Exact WCSR`: duration-weighted top-1 chord ID accuracy over resolved eval segments.
+- `Root`/`MIREX`/`Thirds`/`Triads`/`Tetrads`/`Maj-Min`/`Sevenths` WCSR: `mir_eval`-style duration-weighted chord comparisons over the current product chord vocabulary. Variants with `+ bass` are reported too, but currently mirror non-bass variants because normalized product labels do not preserve slash-bass annotations.
+- `Verifier weighted recall`: duration-weighted positive trials accepted for the true target.
 
 Learner-facing scoring uses the verifier status: `accepted` scores the expected chord as correct, `rejected` scores wrong using the best alternative when available, and `uncertain` reports no detected chord.
 
 ## Current Baseline
 
-Latest full target-aware runs: 2026-05-29 IST.
+Latest full target-aware + WCSR runs: 2026-05-29 IST.
 
-| Implementation | Timestamp | Fingerprint | Evaluated | Top-1 accuracy | Verifier recall | Positive rejected | Uncertain | False accept trials | Wrong-accept samples |
-| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Frontend | `2026-05-28T23:08:22.140Z` | `b2bc7dcc3144d973` | 955 | 14.3% | 10.1% | 20.7% | 69.2% | 0.7% | 11.8% |
-| Python | `2026-05-28T23:13:33.957028Z` | `8f17959faef3430b` | 955 | 14.2% | 9.7% | 20.8% | 69.4% | 0.7% | 11.0% |
+| Implementation | Timestamp | Fingerprint | Evaluated | Duration | Top-1 accuracy | Exact WCSR | Root WCSR | Maj-Min WCSR | Sevenths WCSR | Verifier recall | Verifier weighted recall | Positive rejected | Uncertain | False accept trials | Wrong-accept samples |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Frontend | `2026-05-29T02:22:56.256Z` | `42dbecafd82639db` | 955 | 2502.5s | 14.3% | 13.3% | 37.3% | 30.5% | 13.3% | 10.1% | 9.5% | 20.7% | 69.2% | 0.7% | 11.8% |
+| Python | `2026-05-29T02:23:36.655861Z` | `7465ce0d02de1557` | 955 | 2502.5s | 14.2% | 13.2% | 37.7% | 30.7% | 13.2% | 9.7% | 9.3% | 20.8% | 69.4% | 0.7% | 11.0% |
 
-The target-aware verifier sharply reduces confident wrong accepts compared with the previous open-ended baseline, but recall is still far below the product target. This is a conservative classical DSP v1 baseline, not the endpoint for learner-trustworthy chord recognition.
+The target-aware verifier sharply reduces confident wrong accepts compared with the previous open-ended baseline, but recall and WCSR are still far below the product target. This is a conservative classical DSP v1 baseline, not the endpoint for learner-trustworthy chord recognition.
