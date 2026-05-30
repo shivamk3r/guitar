@@ -1,5 +1,7 @@
 import { type ActiveRecordedSession, startRecordedSession } from "@/audio/sessionRecording";
 import { ensureEngineStarted, getEngine, useEngineState } from "@/audio/useAudioEngine";
+import { syncLearningSessionOrQueue } from "@/storage/pending-backend-sync";
+import { useProgress } from "@/storage/progress-store";
 import { useSettings } from "@/storage/settings-store";
 import { Button } from "@/ui/Button";
 import { LearnTermLink } from "@/ui/LearnTermLink";
@@ -8,6 +10,7 @@ import { Link } from "react-router-dom";
 import { Metronome } from "../metronome";
 import { usePractice } from "../practice-store";
 import { type ScoredEvent, scoreEvent } from "../scoring";
+import { buildStrummingSessionSummary } from "./drill-session";
 
 type Stroke = "D" | "U" | "-";
 
@@ -54,8 +57,10 @@ export function StrummingDrillPage() {
   const metronomeRef = useRef<Metronome | null>(null);
   const recordingRef = useRef<ActiveRecordedSession | null>(null);
   const attemptsRef = useRef<StrummingAttemptMetadata[]>([]);
+  const sessionRef = useRef<{ id: string; startedAtIso: string } | null>(null);
   const settings = useSettings();
   const recordEvent = usePractice((s) => s.recordEvent);
+  const saveSession = useProgress((s) => s.saveSession);
   const patternRef = useRef(pattern);
   patternRef.current = pattern;
 
@@ -68,11 +73,14 @@ export function StrummingDrillPage() {
       const engine = await ensureEngineStarted();
       const ctx = engine.ctx;
       if (!ctx) throw new Error("no audio context");
+      const session = { id: crypto.randomUUID(), startedAtIso: new Date().toISOString() };
       usePractice.getState().reset();
       attemptsRef.current = [];
+      sessionRef.current = session;
       const metronome = new Metronome({
         bpm: bpm * 2, // Eighth notes
         audible: settings.metronomeAudible,
+        mode: settings.metronomeMode,
         volume: settings.metronomeVolume,
         onBeat: ({ beat }) => {
           setCurrentEighth(beat % patternRef.current.strokes.length);
@@ -80,6 +88,8 @@ export function StrummingDrillPage() {
       });
       metronomeRef.current = metronome;
       recordingRef.current = await startRecordedSession({
+        id: session.id,
+        startedAtIso: session.startedAtIso,
         engine,
         activityType: "practice_drill",
         settings,
@@ -106,22 +116,58 @@ export function StrummingDrillPage() {
   async function stop() {
     metronomeRef.current?.stop();
     metronomeRef.current = null;
+    const endedAtIso = new Date().toISOString();
+    const session = sessionRef.current ?? {
+      id: crypto.randomUUID(),
+      startedAtIso: new Date(Date.now() - 60_000).toISOString(),
+    };
+    const metadata = buildStrummingSessionMetadata({
+      attempts: attemptsRef.current,
+      bpm,
+      pattern,
+    });
+    const hadBackendSession = recordingRef.current !== null;
+    let backendStopFailed = false;
     try {
-      await recordingRef.current?.stop(
-        buildStrummingSessionMetadata({
-          attempts: attemptsRef.current,
-          bpm,
-          pattern,
-        }),
-      );
+      await recordingRef.current?.stop(metadata);
     } catch (err) {
+      backendStopFailed = true;
       console.error("session recording upload failed", err);
     } finally {
       recordingRef.current = null;
     }
+    try {
+      await saveSession(
+        buildStrummingSessionSummary({
+          id: session.id,
+          startedAtIso: session.startedAtIso,
+          endedAtIso,
+          bpm,
+          attempts: attemptsRef.current,
+        }),
+      );
+    } catch (err) {
+      console.error("local strumming session save failed", err);
+    }
+    if (!hadBackendSession || backendStopFailed) {
+      const syncResult = await syncLearningSessionOrQueue(
+        {
+          sessionId: session.id,
+          activityType: "practice_drill",
+          startedAtIso: session.startedAtIso,
+          endedAtIso,
+          metadata,
+        },
+        settings,
+      );
+      if (!syncResult.synced) {
+        console.error("strumming backend sync queued", syncResult.error);
+      }
+    }
     await getEngine().stop();
     setRunning(false);
     setCurrentEighth(0);
+    sessionRef.current = null;
   }
 
   // Listen for onsets and score them against nearest expected stroke

@@ -52,6 +52,9 @@ class ObjectStorage:
         response = self.client.get_object(Bucket=self.bucket, Key=object_key)
         return response["Body"].read()
 
+    def delete_recording(self, object_key: str) -> None:
+        self.client.delete_object(Bucket=self.bucket, Key=object_key)
+
 
 def get_object_storage() -> ObjectStorage:
     return ObjectStorage()

@@ -4,7 +4,7 @@
 
 Guitar Coach is an end-to-end guitar learning platform. A learner should be able to improve with only the app, a guitar, themselves, and normal physical accessories such as picks, capos, tuners, strings, headphones, or an audio interface.
 
-The product closes the loop between "I played something" and "what should I do next?" by combining immediate browser-based feedback with consented session recordings, long-term progress history, and asynchronous analysis. Real-time tuner/practice feedback stays in the browser for latency. Backend services persist sessions and recordings so the platform can understand the learner over time and improve its guidance.
+The product closes the loop between "I played something" and "what should I do next?" by combining immediate browser-based feedback with consented session recordings, long-term progress history, and asynchronous analysis. Real-time tuner/practice feedback stays in the browser for latency. Backend services persist sessions, profile data, curriculum progress, song progress, journal notes, and recordings so the platform can understand the learner over time and improve its guidance. The current product target is a complete local-first, single-user learner account running through Docker Compose.
 
 ## 2. Guiding Principles
 
@@ -13,6 +13,7 @@ The product closes the loop between "I played something" and "what should I do n
 3. **Complete learning loop.** The app should guide what to practice next, not just report what happened.
 4. **Explicit consent.** Recording and upload are core capabilities, but they require clear learner consent and future delete/export controls.
 5. **Local-to-cloud parity.** The full stack must run locally with persistent data and map cleanly to AWS services later.
+6. **Single local learner first.** One durable local learner/profile is supported. Multi-user auth, cloud sync, paid/licensed content, and teacher marketplace workflows are out of scope.
 
 ## 3. User Personas
 
@@ -31,8 +32,9 @@ The product closes the loop between "I played something" and "what should I do n
 - **FR-T4** Show a 5-second pitch stability trace in cents from the active string target, with a 0-cent target line, +/-5-cent acceptable band, and faded or broken unreliable samples.
 - **FR-T5** Support standard tuning by default and alternate tunings including Drop D, Half-step down, DADGAD, and Open G.
 - **FR-T6** Work with acoustic guitar via built-in mic and electric guitar via audio interface input.
-- **FR-T7** If recording consent is enabled, record tuning sessions and upload them after capture for progress analysis.
+- **FR-T7** Tuning sessions save local session summaries and `setup-tuning` progress before relying on backend availability. If recording consent is enabled, record tuning sessions and upload them after capture for backend pitch-stability analysis. If backend sync fails, the completed tuning session is queued in IndexedDB and retried later.
 - **FR-T8** Show the current browser microphone input when available, let learners choose a preferred mic before starting audio feedback, and show an input level meter while listening.
+- **FR-T9** Tools provides a local audio calibration check that starts the browser audio engine, classifies signal as silent, quiet, good, or clipping, shows a coarse browser latency estimate, gives learner-facing input guidance, and stores the last calibration quality in IndexedDB without uploading audio.
 
 ### 4.2 Chord Library
 
@@ -41,7 +43,7 @@ The product closes the loop between "I played something" and "what should I do n
 - **FR-C3** Provide reference audio for each chord.
 - **FR-C4** "Check my chord" analyzes a learner strum and returns a 1-10 score plus per-string feedback.
 - **FR-C5** Chords are grouped by difficulty tier and tagged for learning context.
-- **FR-C6** If recording consent is enabled, persist chord-check audio and metadata for asynchronous analysis.
+- **FR-C6** Chord checks save local session summaries and chord progress before relying on backend availability. If recording consent is enabled, persist chord-check audio and metadata for asynchronous analysis. If backend sync fails, the completed chord-check session is queued in IndexedDB and retried later.
 
 ### 4.3 Practice
 
@@ -49,38 +51,61 @@ The product closes the loop between "I played something" and "what should I do n
 - **FR-P2** Progression drills cover common progressions and configurable tempo.
 - **FR-P3** Strumming drills check timing and direction against a pattern.
 - **FR-P4** Adaptive tempo recommends slowing down or speeding up based on rolling scores.
-- **FR-P5** Session summaries show practiced material, score trends, BPM ceilings, and next-step guidance.
+- **FR-P5** Session summaries show practiced material, score trends, BPM ceilings, and next-step guidance. Browser tuner, chord-check, chord-change, progression, timed chord, and strumming drills save local session summaries before relying on backend availability.
 - **FR-P6** If recording consent is enabled, practice sessions are recorded and uploaded for deeper progress analysis.
 - **FR-P7** Timed chord practice lets learners choose one or more chords, tempo, beats per chord, rotation order, session length, and a local count-in preference of off, 2 beats, 4 beats, or 8 beats. The default count-in is 4 beats. Count-in time starts the audio engine, optional metronome clicks, and visual timeline pre-roll, but is excluded from scoring, scored progress, summaries, and recommendations.
+- **FR-P8** Technique practice lets learners track focused self-rated work for barre preparation, muting, pentatonic scales, lead techniques, fingerstyle, and theory targets as local-first sessions with optional BPM, minutes, notes, and backend-derived progress when available.
 
-### 4.4 Learn Glossary
+### 4.4 Learn, Lessons, and Curriculum
 
 - **FR-L1** Provide a Learn tab with beginner-friendly definitions for essential guitar and music terms including pitch, fret, cent, beat, semitone, sharp, flat, note, chord, tempo, rhythm, tuning, and string.
 - **FR-L2** Support glossary search and category filters so learners can find terms from tuner, chord, practice, notation, and timing contexts.
 - **FR-L3** Each glossary term has a dedicated concept page with plain-language explanation, an interactive visual animation, browser-generated audio examples, and where the term appears inside Guitar Coach.
 - **FR-L4** Tuner, chord, and practice screens link learner-facing terminology directly to the matching glossary concept page.
 - **FR-L5** Initial Learn lessons run entirely in the browser with Web Audio and UI animation; they do not require microphone input, recording upload, backend services, or learner consent.
-- **FR-L6** Later Learn milestones may add optional microphone exercises and progress-aware recommendations after consent and progress controls are available.
+- **FR-L6** Structured local lessons cover beginner fundamentals, tuning, chord diagrams, rhythm/tempo, strumming, open chords, chord transitions, barre chord preparation, power chords, pentatonic scale, lead techniques, fingerstyle basics, theory, ear training, and fretboard notes.
+- **FR-L7** Lessons link to the skill tree, practice drills, tools, and song targets.
+- **FR-L8** Lesson completion updates local progress, creates a durable local-first `lesson` session, and updates the backend progress read model for the single learner when the API is available. If backend sync fails, the completion is queued in IndexedDB and retried later.
 
 ### 4.5 Activity History
 
-- **FR-H1** Provide a History page that lists tuning, chord-check, and practice sessions in chronological order.
+- **FR-H1** Provide a History page that lists tuning, chord-check, lesson, practice, song-practice, ear-training, fretboard, and technique sessions in chronological order.
 - **FR-H2** Show each activity's type, start time, duration, completion status, score or tuning result, and whether a recording is available.
 - **FR-H3** Let learners open activity details with saved configuration including tuning preset, chord targets, BPM, beats per chord, practice length, score breakdown, and attempts when available.
 - **FR-H4** Show backend recording-analysis status, detailed chord feedback, learner-facing verified practice score, and per-attempt backend feedback for supported practice recordings when an analysis result is available.
-- **FR-H5** Save meaningful session metadata even when recording consent is disabled.
+- **FR-H5** Save meaningful session metadata and local practice notes even when recording consent is disabled, and show local IndexedDB session history when the backend is unavailable. Local drill history includes completed and stopped tuner, chord-check, chord-change, progression, timed chord, strumming, lesson, song, trainer, and technique work with learner-facing result text; stopped local sessions do not invent a score.
 - **FR-H6** Only save and replay raw audio when explicit recording consent is enabled.
-- **FR-H7** Use history as the durable foundation for later streaks, weak chord-transition detection, tuning consistency, practice frequency, and recommended drills.
+- **FR-H7** Use history as the durable foundation for streaks, weak chord-transition detection, tuning consistency, practice frequency, lesson completion, ear/fretboard trainer evidence, technique/scale/theory evidence, and recommended drills. Closing a session derives backend progress items from tuning, lesson, chord, transition, rhythm, ear-training, fretboard, technique, scale, and theory metadata even when recording consent is disabled.
 
 ### 4.6 Learning Intelligence and Data
 
-- **FR-D1** Create an anonymous learner profile before storing backend sessions; account auth is deferred.
+- **FR-D1** Create or reuse one durable local learner profile before storing backend sessions; if a new browser anonymous id appears, the backend returns the existing local learner instead of creating a second account, and frontend startup drains pending local profile/session syncs, including tuner and chord-check sessions, before restoring backend profile/progress/session summaries with completion status and result text plus synced journal notes into IndexedDB. Multi-user account auth is deferred.
 - **FR-D2** Store recording consent history before uploading tuning, chord-check, or practice audio.
-- **FR-D3** Persist session metadata for meaningful tuning, chord-check, and practice activity, audio object references when consented recordings exist, analysis jobs, and analysis results in backend storage.
+- **FR-D3** Persist session metadata for meaningful tuning, chord-check, practice, song-practice, lesson, ear-training, and fretboard activity, audio object references when consented recordings exist, analysis jobs, and analysis results in backend storage.
 - **FR-D4** Store raw audio in S3-compatible object storage locally through MinIO.
 - **FR-D5** Enqueue recording analysis through an SQS-compatible queue locally through LocalStack.
-- **FR-D6** A worker consumes analysis jobs and writes extracted metrics/results. It runs Solitito chord analysis for supported WAV `chord_check` recordings and supported `practice_drill` chord attempts, and may write placeholder metrics for activity types whose deeper analysis is not implemented yet.
-- **FR-D7** Expose learner progress through a backend read endpoint that can later power personalized guidance.
+- **FR-D6** A worker consumes analysis jobs and writes extracted metrics/results. It runs local autocorrelation tuner analysis for consented WAV `tuner` recordings, Solitito chord analysis for supported WAV `chord_check` recordings and supported `practice_drill` chord attempts, and may write placeholder metrics for activity types whose deeper analysis is not implemented yet.
+- **FR-D7** Expose learner progress through a backend read endpoint that powers deterministic local guidance from profile data, progress items, closed sessions, and analysis results.
+- **FR-D8** Persist editable profile fields locally first and in the backend when available: display name, skill level, goals, handedness, guitar preference, daily practice target, preferred genres, onboarding status, and recording consent setting. Today onboarding and Settings edits must remain usable when the API is temporarily unavailable, with backend profile/consent sync retried later.
+- **FR-D9** Expose deterministic v1 endpoints for profile, learning path, practice plan, progress dashboard, songs, lesson completion, progress items, journal notes, learner metadata export, and recording export/delete metadata.
+
+### 4.7 Today, Learning Path, and Recommendations
+
+- **FR-G1** The first screen is Today, not a marketing page. It shows onboarding for a fresh local learner and a daily plan after setup; completing onboarding saves locally before requiring backend availability.
+- **FR-G2** The learning path covers tuning, open chords, chord transitions, strumming, rhythm, songs, barre chords, scales, lead techniques, fingerstyle basics, theory, ear training, and fretboard knowledge.
+- **FR-G3** Practice plans offer 10, 20, and 45 minute options using profile, local progress, weak chords/transitions, unfinished lessons, and song progress.
+- **FR-G4** Skill states are locked, ready, in progress, review, or mastered. Rules are deterministic and explainable, and they use lesson completion plus target evidence from chords, transitions, rhythm, songs, ear training, and fretboard trainers.
+- **FR-G5** Ear training includes browser-synthesized interval, major/minor, chord-quality, and simple-progression prompts. Checked answers save local `ear-training` progress and local-first sessions, then sync to the backend singleton learner when available.
+- **FR-G6** Fretboard training includes checked note-location prompts for all six strings plus octave-shape prompts. Answers save local `fretboard` progress and local-first sessions, then sync to the backend singleton learner when available.
+
+### 4.8 Songs, Progress, and Retention
+
+- **FR-S1** Song learning uses local seed songs only: app-authored originals or public-domain/traditional forms.
+- **FR-S2** Songs include chord charts, sections, difficulty, required skills, tempo, strumming pattern, section looping, slow tempo practice, local-first song-practice stop/completion session history, and completion/mastery tracking.
+- **FR-S3** Progress tracks mastery by skill, lesson, chord, transition, song, song section, rhythm, technique, scale, theory, ear exercise, fretboard exercise, and challenge. Song section stops record durable local `song_practice` history without awarding score or mastery. Song section completion records both aggregate `song` progress and a durable `song-section` progress item, plus a durable `song_practice` session with an idempotent client session id for backend restore; failed backend sync is queued in IndexedDB with the matching song-progress patch and retried later without double-counting already-completed sections.
+- **FR-S4** Progress dashboard shows practice minutes, grace-day-aware streaks, weekly/monthly recaps, best recent improvement evidence, mastered/review/ready counts, blockers, recommendations, challenges, and checked ear/fretboard trainer exercises whose local-first session results sync to the durable local learner when the API is available.
+- **FR-S5** History supports consented recording playback, export/download metadata, deletion controls, backend analysis status, and local-first review notes that sync to backend journal entries when available. Unsynced local notes are retried after pending local sessions are restored and when History refreshes. Synced backend journal entries are imported into IndexedDB during account restore so practice notes remain part of the durable local account after browser storage reset.
+- **FR-S6** Settings supports exporting local account metadata as JSON so the single learner can inspect or back up profile, progress, session, journal, and recording-retention state. The downloaded export always includes the IndexedDB account snapshot and includes the backend export when reachable. The backend export is used by startup recovery after browser storage reset.
 
 ## 5. Non-Functional Requirements
 
@@ -112,30 +137,37 @@ The browser and classical DSP baselines remain below the long-term **NFR-2** acc
 - **AR-3** Immediate chord detection uses browser-side harmonic chroma/template analysis, target-aware verification, and per-string classification.
 - **AR-4** Rhythm drills use onset detection with timestamps aligned to the audio clock.
 - **AR-5** Recording uses the already-granted microphone stream and does not replace the real-time feedback path.
-- **AR-6** Backend analysis is asynchronous. For consented WAV `chord_check` recordings and supported `practice_drill` chord attempts, the worker runs the pinned Solitito ONNX detector and stores target-aware metrics; other activity types may still write placeholder metrics until deeper analysis is implemented.
+- **AR-6** Backend analysis is asynchronous. For consented WAV `tuner` recordings, the worker stores local pitch-stability metrics including voiced frames, centered-frame rate, median note, cents drift, and tuning guidance. For consented WAV `chord_check` recordings and supported `practice_drill` chord attempts, the worker runs the pinned Solitito ONNX detector and stores target-aware metrics; other activity types may still write placeholder metrics until deeper analysis is implemented.
 - **AR-7** Browser audio input selection uses the selected `audioinput` device for realtime DSP and consented recording, falls back to browser default if the preferred device is unavailable, and disables switching during active scored or recorded sessions.
 - **AR-8** Microphone labels and device identifiers remain local browser UI/preference state and are not included in recording session metadata by default.
 - **AR-9** Browser microphone capture requests speech processing disabled (`echoCancellation`, `noiseSuppression`, and `autoGainControl`) so guitar recordings keep harmonics, sustain, and room detail. Consented recordings are saved as raw PCM WAV before app analysis filters; compressed browser recording is only a fallback when raw capture is unavailable.
 - **AR-10** Python chord detection includes the classical DSP eval bench and the Solitito backend detector. Solitito is wired only to async recording analysis, not to immediate browser feedback.
+- **AR-11** Audio calibration is browser-only, uses level events from the same AudioWorklet path as practice, estimates browser latency from the active AudioContext, and persists only the quality category locally.
 
 ## 7. Data Model
 
-- **Learner**: anonymous learner id, creation time.
+- **Learner**: singleton local account row with anonymous learner id and creation time.
+- **LearnerProfile**: one local learner's display name, skill level, goals, handedness, instrument preference, daily practice target, preferred genres, onboarding status, and consent mirror.
 - **RecordingConsent**: learner id, granted flag, policy version, source, timestamp.
 - **LearningSession**: learner id, activity type, start/end timestamps, client metadata.
+- **LearnerProgressItem**: learner id, item type/id, status, mastery, attempts, minutes, score/tempo evidence, due date, last practiced timestamp, and metadata.
 - **AudioRecording**: session id, learner id, object key, bucket, content type, size, capture time.
+- **RecordingRetention**: recording id, delete/export timestamps, export count, delete reason.
 - **AnalysisJob**: recording id, queued/running/completed/failed status, timestamps, error.
 - **AnalysisResult**: job id, recording id, raw metrics, guidance. API responses map raw metrics into stable summary/detail fields for frontend display.
+- **JournalEntry**: optional learner/session practice note, mood, focus, timestamps, and local sync metadata when stored in IndexedDB before backend sync.
+- **PendingBackendSync**: local IndexedDB retry record for profile/consent snapshots or completed learning sessions that saved locally but could not yet sync to the backend singleton learner.
 - **Progress read model**: learner-level summaries and recommendations derived from sessions and analyses.
 
 ## 8. Out of Scope for the Current Migration
 
 - Full account authentication.
-- Production retention/deletion UX.
+- Production-grade retention policies beyond local export/delete controls.
 - Licensed song libraries.
 - Human teacher marketplace.
 - Native mobile apps.
 - Full ML progress model training and inference.
+- Cloud deployment and multi-user production authorization for this local-first stage.
 
 ## 9. Scoring System
 

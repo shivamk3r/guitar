@@ -5,11 +5,25 @@ import {
   type RecordingAnalysisSummary,
   type RecordingSummary,
   type SessionHistoryItem,
+  createSessionJournal,
+  deleteRecording,
   fetchLearnerHistory,
   fetchRecordingAnalysis,
   fetchSessionDetail,
+  fetchSessionJournal,
+  markRecordingExported,
   recordingMediaUrl,
 } from "@/api/client";
+import {
+  type JournalViewEntry,
+  createLocalJournalEntry,
+  getLocalJournalEntriesForSession,
+  localJournalToView,
+  markLocalJournalEntrySynced,
+  mergeJournalEntries,
+  syncUnsyncedLocalJournalEntries,
+} from "@/storage/journal-store";
+import { useProgress } from "@/storage/progress-store";
 import { useSettings } from "@/storage/settings-store";
 import { Button } from "@/ui/Button";
 import { clsx } from "@/ui/clsx";
@@ -25,21 +39,29 @@ import {
   getAttempts,
   getConfigRows,
   getScoreRows,
+  isLocalOnlyHistorySession,
+  localSessionToHistoryItem,
+  mergeHistorySessions,
   timelineResult,
 } from "./history-utils";
 
 export function HistoryPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const settings = useSettings();
+  const progressHydrated = useProgress((state) => state.hydrated);
+  const localSessions = useProgress((state) => state.sessions);
   const [sessions, setSessions] = useState<SessionHistoryItem[]>([]);
   const [detail, setDetail] = useState<SessionHistoryItem | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadHistory = useCallback(async () => {
-    if (!settings.hydrated) return;
+    if (!settings.hydrated || !progressHydrated) return;
+    const localHistory = localSessions.map((session) =>
+      localSessionToHistoryItem(session, settings.learnerId),
+    );
+    setSessions(localHistory);
     if (!settings.learnerId) {
-      setSessions([]);
       setDetail(null);
       setError(null);
       setLoading(false);
@@ -48,15 +70,26 @@ export function HistoryPage() {
     setLoading(true);
     setError(null);
     try {
+      const journalSync = await syncUnsyncedLocalJournalEntries({ learnerId: settings.learnerId });
+      if (journalSync.failed > 0) {
+        console.error("journal backend sync retry failed", journalSync);
+      }
       const nextSessions = await fetchLearnerHistory(settings.learnerId);
-      setSessions(nextSessions);
+      setSessions(mergeHistorySessions(localHistory, nextSessions));
     } catch (err) {
       console.error("history load failed", err);
-      setError(err instanceof Error ? err.message : "Could not load history.");
+      setSessions(localHistory);
+      setError(
+        localHistory.length > 0
+          ? "Showing local history; backend history is unavailable."
+          : err instanceof Error
+            ? err.message
+            : "Could not load history.",
+      );
     } finally {
       setLoading(false);
     }
-  }, [settings.hydrated, settings.learnerId]);
+  }, [localSessions, progressHydrated, settings.hydrated, settings.learnerId]);
 
   useEffect(() => {
     loadHistory();
@@ -76,6 +109,10 @@ export function HistoryPage() {
       setDetail(selectedFromList);
       return;
     }
+    if (!settings.learnerId) {
+      setDetail(null);
+      return;
+    }
     let cancelled = false;
     setDetail(null);
     fetchSessionDetail(sessionId)
@@ -90,7 +127,7 @@ export function HistoryPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedFromList, sessionId]);
+  }, [selectedFromList, sessionId, settings.learnerId]);
 
   const selected = sessionId ? detail : null;
 
@@ -103,7 +140,7 @@ export function HistoryPage() {
             Review saved tuning, chord check, and practice activity.
           </p>
         </div>
-        <Button variant="secondary" onClick={loadHistory} disabled={loading || !settings.learnerId}>
+        <Button variant="secondary" onClick={loadHistory} disabled={loading}>
           Refresh
         </Button>
       </header>
@@ -112,7 +149,7 @@ export function HistoryPage() {
         <div className="mb-4 text-bad text-sm border border-bad/30 rounded px-3 py-2">{error}</div>
       )}
 
-      {!settings.learnerId ? (
+      {sessions.length === 0 && !settings.learnerId ? (
         <EmptyHistory />
       ) : (
         <div className="grid lg:grid-cols-[minmax(280px,0.9fr)_minmax(0,1.25fr)] gap-6">
@@ -141,7 +178,7 @@ function EmptyHistory() {
         Recordings stay off unless you enable recording consent in Settings.
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
-        <Link className="text-sm text-accent hover:underline" to="/">
+        <Link className="text-sm text-accent hover:underline" to="/tools/tuner">
           Open tuner
         </Link>
         <Link className="text-sm text-accent hover:underline" to="/practice">
@@ -253,6 +290,7 @@ function HistoryDetail({ session }: { session: SessionHistoryItem }) {
 
       <DetailRows title="Session configuration" rows={configRows} empty="No configuration saved." />
       <DetailRows title="Score breakdown" rows={scoreRows} empty="No score breakdown saved." />
+      <JournalPanel session={session} />
 
       {attempts.length > 0 && (
         <div className="bg-panel border border-white/5 rounded-lg p-5">
@@ -278,6 +316,129 @@ function HistoryDetail({ session }: { session: SessionHistoryItem }) {
 
       <RecordingPanel session={session} />
     </article>
+  );
+}
+
+function JournalPanel({ session }: { session: SessionHistoryItem }) {
+  const settings = useSettings();
+  const [entries, setEntries] = useState<JournalViewEntry[]>([]);
+  const [body, setBody] = useState("");
+  const [focus, setFocus] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const localOnly = isLocalOnlyHistorySession(session);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadEntries() {
+      const localEntries = await getLocalJournalEntriesForSession(session.id);
+      if (localOnly) {
+        if (!cancelled) setEntries(mergeJournalEntries(localEntries, []));
+        return;
+      }
+      try {
+        const backendEntries = await fetchSessionJournal(session.id);
+        if (!cancelled) setEntries(mergeJournalEntries(localEntries, backendEntries));
+      } catch (err) {
+        console.error("journal load failed", err);
+        if (!cancelled) setEntries(mergeJournalEntries(localEntries, []));
+      }
+    }
+    loadEntries().catch((err) => {
+      console.error("local journal load failed", err);
+      if (!cancelled) setError(err instanceof Error ? err.message : "Could not load notes.");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [localOnly, session.id]);
+
+  async function saveNote() {
+    if (body.trim().length === 0) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const localEntry = await createLocalJournalEntry({
+        learnerId: settings.learnerId,
+        sessionId: session.id,
+        body: body.trim(),
+        focus: focus.trim() || null,
+      });
+      setEntries((current) =>
+        [localJournalToView(localEntry), ...current].sort((a, b) =>
+          b.createdAtIso.localeCompare(a.createdAtIso),
+        ),
+      );
+      setBody("");
+      setFocus("");
+      if (!settings.learnerId || localOnly) return;
+      try {
+        const backendEntry = await createSessionJournal({
+          sessionId: session.id,
+          learnerId: settings.learnerId,
+          body: localEntry.body,
+          focus: localEntry.focus,
+          mood: localEntry.mood,
+        });
+        const syncedEntry = await markLocalJournalEntrySynced(localEntry.id, backendEntry);
+        if (syncedEntry) {
+          setEntries((current) =>
+            current.map((entry) =>
+              entry.id === localEntry.id ? localJournalToView(syncedEntry) : entry,
+            ),
+          );
+        }
+      } catch (err) {
+        console.error("journal backend sync failed", err);
+        setError("Saved locally; backend note sync is unavailable.");
+      }
+    } catch (err) {
+      console.error("local journal save failed", err);
+      setError(err instanceof Error ? err.message : "Could not save note.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="bg-panel border border-white/5 rounded-lg p-5">
+      <h3 className="text-sm uppercase tracking-wide text-muted mb-3">Practice notes</h3>
+      <div className="grid gap-3">
+        <input
+          value={focus}
+          onChange={(event) => setFocus(event.target.value)}
+          placeholder="Focus, e.g. best take or needs work"
+          className="rounded border border-white/10 bg-surface px-3 py-2 text-sm text-ink"
+        />
+        <textarea
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
+          placeholder="What improved? What should tomorrow review?"
+          rows={3}
+          className="rounded border border-white/10 bg-surface px-3 py-2 text-sm text-ink"
+        />
+        <div className="flex items-center gap-3">
+          <Button onClick={saveNote} disabled={saving || body.trim().length === 0}>
+            {saving ? "Saving..." : "Save note"}
+          </Button>
+          {error && <span className="text-sm text-bad">{error}</span>}
+        </div>
+      </div>
+      {entries.length > 0 && (
+        <ol className="mt-4 space-y-2">
+          {entries.map((entry) => (
+            <li key={entry.id} className="rounded border border-white/10 px-3 py-2 text-sm">
+              {entry.focus && <div className="mb-1 font-medium">{entry.focus}</div>}
+              <p className="text-muted">{entry.body}</p>
+              <div className="mt-1 text-xs text-muted">
+                {formatDateTime(entry.createdAtIso)}
+                {entry.source === "local" && !entry.synced ? " · local" : ""}
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
   );
 }
 
@@ -341,10 +502,23 @@ function RecordingPanel({ session }: { session: SessionHistoryItem }) {
                   download={`guitar-session-${recording.id}.${recordingExtension(
                     recording.content_type,
                   )}`}
+                  onClick={() => markRecordingExported(recording.id).catch(console.error)}
                   className="text-accent hover:underline"
                 >
                   Download raw audio
                 </a>
+                <button
+                  type="button"
+                  className="text-bad hover:underline"
+                  onClick={() => {
+                    if (!confirm("Delete this local recording? Session metadata stays.")) return;
+                    deleteRecording(recording.id, "learner-requested")
+                      .then(() => window.location.reload())
+                      .catch((err) => alert(err instanceof Error ? err.message : "Delete failed"));
+                  }}
+                >
+                  Delete recording
+                </button>
               </div>
               <RecordingAnalysisSummaryLine summary={recording.analysis} />
               <RecordingAnalysisFeedback recording={recording} />
@@ -502,6 +676,7 @@ function PracticeAttemptRow({ attempt }: { attempt: PracticeAttemptAnalysis }) {
 
 function analysisDetailRows(analysis: RecordingAnalysis): { label: string; value: string }[] {
   if (analysis.practice) return practiceDetailRows(analysis);
+  if (analysis.tuner) return tunerDetailRows(analysis);
   const prediction = analysis.prediction;
   const capture = analysis.capture;
   const rows: { label: string; value: string }[] = [];
@@ -549,6 +724,23 @@ function practiceDetailRows(analysis: RecordingAnalysis): { label: string; value
   return rows;
 }
 
+function tunerDetailRows(analysis: RecordingAnalysis): { label: string; value: string }[] {
+  const tuner = analysis.tuner;
+  const rows: { label: string; value: string }[] = [];
+  if (!tuner) return rows;
+  addAnalysisRow(rows, "Result", analysisResultLabel(analysisResultValue(analysis)));
+  addAnalysisRow(rows, "Tuning", tuner.tuning_name ?? tuner.tuning_id ?? undefined);
+  addAnalysisRow(rows, "Median note", tuner.median_note ?? undefined);
+  addAnalysisRow(rows, "Median frequency", hertzLabel(tuner.median_hz));
+  addAnalysisRow(rows, "Median cents", centsLabel(tuner.median_cents));
+  addAnalysisRow(rows, "Average cents from center", centsLabel(tuner.mean_abs_cents));
+  addAnalysisRow(rows, "Pitch spread", centsLabel(tuner.cents_std_dev));
+  addAnalysisRow(rows, "Centered frames", percentOrUndefined(tuner.in_tune_frame_rate));
+  addAnalysisRow(rows, "Voiced frames", `${tuner.voiced_frame_count}/${tuner.frame_count}`);
+  addAnalysisRow(rows, "Model", analysis.detector?.name);
+  return rows;
+}
+
 function addAnalysisRow(
   rows: { label: string; value: string }[],
   label: string,
@@ -559,6 +751,7 @@ function addAnalysisRow(
 }
 
 function analysisResultValue(analysis: RecordingAnalysis): string {
+  if (analysis.tuner) return "tuning_analyzed";
   if (analysis.practice) return "analyzed";
   return analysis.prediction?.verifier_status ?? analysis.status;
 }
@@ -601,7 +794,11 @@ function analysisStatusClass(summary: RecordingAnalysisSummary): string {
   if (summary.status === "failed" || summary.result === "rejected") {
     return "bg-bad/10 text-bad border border-bad/30";
   }
-  if (summary.result === "accepted" || summary.result === "analyzed") {
+  if (
+    summary.result === "accepted" ||
+    summary.result === "analyzed" ||
+    summary.result === "tuning_analyzed"
+  ) {
     return "bg-accent/10 text-accent border border-accent/30";
   }
   if (summary.status === "queued" || summary.status === "running") {
@@ -625,6 +822,14 @@ function percent(value: number): string {
 
 function numberOrUndefined(value: number | null | undefined): string | undefined {
   return value == null ? undefined : String(value);
+}
+
+function centsLabel(value: number | null | undefined): string | undefined {
+  return value == null ? undefined : `${value.toFixed(1)} cents`;
+}
+
+function hertzLabel(value: number | null | undefined): string | undefined {
+  return value == null ? undefined : `${value.toFixed(2)} Hz`;
 }
 
 function rawQualityLabel(value: string | null | undefined): string | undefined {

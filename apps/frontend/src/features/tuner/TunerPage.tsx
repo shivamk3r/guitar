@@ -2,6 +2,8 @@ import { type ActiveRecordedSession, startRecordedSession } from "@/audio/sessio
 import { ensureEngineStarted, getEngine, useEngineState } from "@/audio/useAudioEngine";
 import { type StringTuning, TUNINGS, getTuning } from "@/data/tunings";
 import { NOTE_NAMES } from "@/lib/math";
+import { syncLearningSessionOrQueue } from "@/storage/pending-backend-sync";
+import { useProgress } from "@/storage/progress-store";
 import { useSettings } from "@/storage/settings-store";
 import { Button } from "@/ui/Button";
 import { LearnTermLink } from "@/ui/LearnTermLink";
@@ -14,6 +16,11 @@ import {
   makePitchTraceSample,
   resolveTraceTarget,
 } from "./pitch-trace";
+import {
+  type TunerSessionMetadata,
+  buildTunerProgressPatch,
+  buildTunerSessionSummary,
+} from "./tuner-session";
 import { useTuner } from "./tuner-store";
 
 export function TunerPage() {
@@ -22,9 +29,12 @@ export function TunerPage() {
   const settings = useSettings();
   const tuningId = settings.tuningId;
   const updateSettings = settings.update;
+  const saveSession = useProgress((s) => s.saveSession);
+  const upsertProgressItem = useProgress((s) => s.upsertProgressItem);
   const tuning = getTuning(tuningId);
   const [error, setError] = useState<string | null>(null);
   const recordingRef = useRef<ActiveRecordedSession | null>(null);
+  const sessionRef = useRef<{ id: string; startedAtIso: string } | null>(null);
   const traceRef = useRef<PitchStabilityTraceHandle | null>(null);
   const activeTargetRef = useRef<StringTuning | null>(null);
   const [activeTarget, setActiveTarget] = useState<StringTuning | null>(null);
@@ -77,8 +87,12 @@ export function TunerPage() {
     setLockedStringMidis({});
     try {
       const engine = await ensureEngineStarted();
+      const session = { id: crypto.randomUUID(), startedAtIso: new Date().toISOString() };
+      sessionRef.current = session;
       setStatus("listening");
       recordingRef.current = await startRecordedSession({
+        id: session.id,
+        startedAtIso: session.startedAtIso,
         engine,
         activityType: "tuner",
         settings,
@@ -99,20 +113,64 @@ export function TunerPage() {
   }
 
   async function handleStop() {
+    const endedAtIso = new Date().toISOString();
+    const session = sessionRef.current ?? {
+      id: crypto.randomUUID(),
+      startedAtIso: new Date(Date.now() - 60_000).toISOString(),
+    };
+    const metadata = buildTunerSessionMetadata({
+      hz,
+      lockedStringMidis,
+      noteLabel: note ? `${note.name}${note.octave}` : null,
+      tuning,
+      tuningId,
+    });
+    const hadBackendSession = recordingRef.current !== null;
+    let backendStopFailed = false;
     try {
-      await recordingRef.current?.stop(
-        buildTunerSessionMetadata({
-          hz,
-          lockedStringMidis,
-          noteLabel: note ? `${note.name}${note.octave}` : null,
-          tuning,
-          tuningId,
-        }),
-      );
+      await recordingRef.current?.stop(metadata);
     } catch (err) {
+      backendStopFailed = true;
       console.error("session recording upload failed", err);
     } finally {
       recordingRef.current = null;
+    }
+    try {
+      await Promise.all([
+        saveSession(
+          buildTunerSessionSummary({
+            id: session.id,
+            startedAtIso: session.startedAtIso,
+            endedAtIso,
+            tuningResult: metadata.tuningResult,
+          }),
+        ),
+        upsertProgressItem(
+          buildTunerProgressPatch({
+            sessionId: session.id,
+            startedAtIso: session.startedAtIso,
+            endedAtIso,
+            tuningResult: metadata.tuningResult,
+          }),
+        ),
+      ]);
+    } catch (err) {
+      console.error("local tuner session save failed", err);
+    }
+    if (!hadBackendSession || backendStopFailed) {
+      const syncResult = await syncLearningSessionOrQueue(
+        {
+          sessionId: session.id,
+          activityType: "tuner",
+          startedAtIso: session.startedAtIso,
+          endedAtIso,
+          metadata,
+        },
+        settings,
+      );
+      if (!syncResult.synced) {
+        console.error("tuner backend sync queued", syncResult.error);
+      }
     }
     await getEngine().stop();
     activeTargetRef.current = null;
@@ -120,6 +178,7 @@ export function TunerPage() {
     traceRef.current?.reset();
     reset();
     setLockedStringMidis({});
+    sessionRef.current = null;
   }
 
   const isRunning = engineState === "running";
@@ -258,7 +317,7 @@ function buildTunerSessionMetadata(input: {
   noteLabel: string | null;
   tuning: ReturnType<typeof getTuning>;
   tuningId: string;
-}): Record<string, unknown> {
+}): TunerSessionMetadata {
   const tunedStrings = input.tuning.strings.filter(
     (string) => input.lockedStringMidis[string.midi],
   );

@@ -1,13 +1,28 @@
 import { PROGRESSIONS } from "@/data/progressions";
+import { buildPracticePlanOptions } from "@/lib/coaching";
 import { useProgress } from "@/storage/progress-store";
+import { useSettings } from "@/storage/settings-store";
 import { LearnTermLink } from "@/ui/LearnTermLink";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
 export function PracticePage() {
   const transitionMap = useProgress((s) => s.transitionBests);
+  const chordBests = useProgress((s) => s.chordBests);
+  const progressItems = useProgress((s) => s.progressItems);
   const sessions = useProgress((s) => s.sessions);
+  const settings = useSettings();
   const transitions = useMemo(() => Object.values(transitionMap), [transitionMap]);
+  const balancedPlan = useMemo(
+    () =>
+      buildPracticePlanOptions({
+        settings,
+        chordBests,
+        transitionBests: transitionMap,
+        progressItems,
+      }).find((option) => option.minutes === 20),
+    [settings, chordBests, transitionMap, progressItems],
+  );
   const sessionsThisWeek = useMemo(
     () =>
       sessions.filter((session) => {
@@ -32,6 +47,25 @@ export function PracticePage() {
         Sessions this week: <span className="text-ink font-medium">{sessionsThisWeek}</span>
       </div>
 
+      {balancedPlan && (
+        <div className="mb-8 rounded-lg border border-white/5 bg-panel p-5">
+          <h2 className="text-lg font-semibold">Structured session</h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            {balancedPlan.tasks.map((task) => (
+              <Link
+                key={task.id}
+                to={task.route}
+                className="rounded-md border border-white/10 p-3 transition-colors hover:border-white/25"
+              >
+                <div className="text-xs uppercase tracking-wide text-muted">{task.kind}</div>
+                <div className="mt-1 font-medium">{task.title}</div>
+                <div className="mt-2 text-xs text-muted">{task.minutes} minutes</div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid md:grid-cols-2 gap-4 mb-8">
         <DrillCard
           title="Timed chord practice"
@@ -47,6 +81,11 @@ export function PracticePage() {
           title="Strumming pattern drill"
           body="Visual down/up pattern with timing feedback per bar."
           to="/practice/strumming"
+        />
+        <DrillCard
+          title="Technique practice"
+          body="Track focused technique, scale, lead, fingerstyle, and theory work."
+          to="/practice/technique"
         />
       </div>
 

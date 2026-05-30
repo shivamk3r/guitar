@@ -4,7 +4,7 @@ Agent-facing guide to this repository. Human-facing overview is in [README.md](R
 
 ## What This Is
 
-Guitar Coach is an end-to-end app for learning guitar. It combines immediate browser audio feedback with consented recording, backend persistence, asynchronous analysis, and future progress guidance.
+Guitar Coach is an end-to-end local-first, single-user app for learning guitar. It combines Today planning, profile onboarding, structured lessons, seed songs, progress intelligence, immediate browser audio feedback, consented recording, backend persistence, and asynchronous analysis.
 
 ## Read First
 
@@ -17,8 +17,8 @@ If implementation and docs disagree, update the docs in the same change.
 
 ## Current Stack
 
-- Frontend: Vite, React 18, TypeScript strict, Tailwind, Zustand, IndexedDB, Web Audio, AudioWorklet.
-- Backend: FastAPI, SQLAlchemy, Postgres, MinIO, LocalStack SQS, Python worker.
+- Frontend: Vite, React 18, TypeScript strict, Tailwind, Zustand, IndexedDB, Web Audio, AudioWorklet, static local curriculum/song seeds, deterministic coaching rules.
+- Backend: FastAPI, SQLAlchemy, Postgres, MinIO, LocalStack SQS, Python worker, single local profile/progress APIs.
 - Tests/evals: Vitest, Playwright, Pytest, manual target-aware + WCSR chord detection evals for frontend, Python DSP, and Python Solitito.
 - Tooling: pnpm workspace, Biome, Docker Compose.
 
@@ -61,6 +61,7 @@ python3 -m pytest
 ## Rules
 
 - Immediate musical feedback stays browser-side for latency.
+- One durable local learner/profile is supported; do not add cloud deployment or multi-user production auth unless the product scope changes.
 - Backend async WAV analysis for `chord_check` and supported `practice_drill` chord attempts uses the pinned Solitito ONNX detector.
 - Recording/upload requires explicit learner consent.
 - The frontend uploads recordings through the API, not directly to MinIO.

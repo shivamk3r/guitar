@@ -1,28 +1,29 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("navigation", () => {
-  test("home page loads the tuner", async ({ page }) => {
+  test("home page loads Today with local onboarding", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Tuner" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start listening" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Create local profile" })).toBeVisible();
     await expect(page.getByRole("region", { name: "Audio input selector" })).toBeVisible();
   });
 
   test("can navigate between the primary sections", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("link", { name: "Chord Library" }).click();
-    await expect(page.getByRole("heading", { name: "Chord Library" })).toBeVisible();
+    await page.getByRole("link", { name: "Learn" }).click();
+    await expect(page.getByRole("heading", { name: "Learn", exact: true })).toBeVisible();
     await page.getByRole("link", { name: "Practice" }).click();
     await expect(page.getByRole("heading", { name: "Practice" })).toBeVisible();
-    await page.getByRole("link", { name: "Learn" }).click();
-    await expect(page.getByRole("heading", { name: "Learn" })).toBeVisible();
+    await page.getByRole("link", { name: "Songs" }).click();
+    await expect(page.getByRole("heading", { name: "Songs" })).toBeVisible();
+    await page.getByRole("link", { name: "Progress" }).click();
+    await expect(page.getByRole("heading", { name: "Progress" })).toBeVisible();
     await page.getByRole("link", { name: "History" }).click();
     await expect(page.getByRole("heading", { name: "History" })).toBeVisible();
-    await page
-      .getByRole("navigation", { name: "Primary" })
-      .getByRole("link", { name: "Tuner" })
-      .click();
-    await expect(page.getByRole("heading", { name: "Tuner" })).toBeVisible();
+    await page.getByRole("link", { name: "Tools" }).click();
+    await expect(page.getByRole("heading", { name: "Tools" })).toBeVisible();
+    await page.getByRole("link", { name: "Today" }).click();
+    await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
   });
 
   test("floating microphone selector is available across routes", async ({ page }) => {
@@ -45,7 +46,7 @@ test.describe("navigation", () => {
 
   test("learn glossary supports search, category filters, and concept pages", async ({ page }) => {
     await page.goto("/learn");
-    await expect(page.getByRole("heading", { name: "Learn" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Learn", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: /^Pitch\b/ })).toBeVisible();
 
     const search = page.getByPlaceholder(/Search/i);
@@ -56,7 +57,7 @@ test.describe("navigation", () => {
     await search.fill("");
     await page.getByRole("button", { name: "Timing" }).click();
     await expect(page.getByRole("link", { name: /^Beat\b/ })).toBeVisible();
-    await expect(page.getByRole("link", { name: /^Rhythm\b/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Rhythm Timing\b/ })).toBeVisible();
     await expect(page.getByRole("link", { name: /^Fret\b/ })).not.toBeVisible();
 
     await page.getByRole("link", { name: /^Tempo\b/ }).click();
@@ -95,7 +96,15 @@ test.describe("navigation", () => {
     await expect(page.getByText("Timed chord practice")).toBeVisible();
     await expect(page.getByText("Chord change drill")).toBeVisible();
     await expect(page.getByText("Strumming pattern drill")).toBeVisible();
+    await expect(page.getByText("Technique practice")).toBeVisible();
     await expect(page.getByText(/I–IV–V in G/)).toBeVisible();
+  });
+
+  test("technique practice page records later-skill targets", async ({ page }) => {
+    await page.goto("/practice/technique?target=pentatonic-box");
+    await expect(page.getByRole("heading", { name: "Technique practice" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "A minor pentatonic box" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save practice" })).toBeVisible();
   });
 
   test("settings page renders and can toggle audible metronome", async ({ page }) => {
@@ -105,5 +114,15 @@ test.describe("navigation", () => {
     await expect(checkbox).not.toBeChecked();
     await checkbox.check();
     await expect(checkbox).toBeChecked();
+    await expect(page.getByRole("button", { name: "Export local account data" })).toBeVisible();
+  });
+
+  test("tools page opens the tuner", async ({ page }) => {
+    await page.goto("/tools");
+    await expect(page.getByRole("heading", { name: "Audio calibration" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Run calibration" })).toBeVisible();
+    await page.getByRole("link", { name: /^Tuner\b/ }).click();
+    await expect(page.getByRole("heading", { name: "Tuner" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start listening" })).toBeVisible();
   });
 });

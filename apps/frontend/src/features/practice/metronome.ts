@@ -6,9 +6,12 @@
  * source of truth so it doesn't drift.
  */
 
+export type MetronomeMode = "normal" | "accented" | "silent-bars" | "groove";
+
 export interface MetronomeOptions {
   bpm: number;
   audible: boolean;
+  mode?: MetronomeMode;
   volume: number;
   onBeat: (info: { beat: number; tAudio: number }) => void;
 }
@@ -85,8 +88,11 @@ export class Metronome {
     if (!this.running || !this.ctx) return;
     const lookAhead = 0.2; // schedule 200ms ahead
     while (this.nextBeatTime < this.ctx.currentTime + lookAhead) {
-      if (this.options.audible && this.clickGain) {
-        this.scheduleClick(this.nextBeatTime, this.nextBeatNumber % 4 === 0);
+      if (this.options.audible && this.clickGain && this.shouldClick(this.nextBeatNumber)) {
+        this.scheduleClick(this.nextBeatTime, this.isAccent(this.nextBeatNumber));
+        if (this.options.mode === "groove") {
+          this.scheduleClick(this.nextBeatTime + 30 / this.options.bpm, false, 0.45);
+        }
       }
       this.nextBeatNumber++;
       this.nextBeatTime += 60 / this.options.bpm;
@@ -94,14 +100,23 @@ export class Metronome {
     this.scheduleTimer = window.setTimeout(this.scheduleLoop, 25);
   };
 
-  private scheduleClick(time: number, isDownbeat: boolean): void {
+  private shouldClick(beat: number): boolean {
+    if (this.options.mode !== "silent-bars") return true;
+    return Math.floor(beat / 4) % 4 !== 3;
+  }
+
+  private isAccent(beat: number): boolean {
+    return this.options.mode !== "normal" && beat % 4 === 0;
+  }
+
+  private scheduleClick(time: number, isDownbeat: boolean, level = 1): void {
     if (!this.ctx || !this.clickGain) return;
     const osc = this.ctx.createOscillator();
     osc.type = "square";
     osc.frequency.value = isDownbeat ? 1200 : 800;
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(0, time);
-    g.gain.linearRampToValueAtTime(1, time + 0.002);
+    g.gain.linearRampToValueAtTime(level, time + 0.002);
     g.gain.exponentialRampToValueAtTime(0.0001, time + 0.06);
     osc.connect(g).connect(this.clickGain);
     osc.start(time);

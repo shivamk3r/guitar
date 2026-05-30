@@ -8,6 +8,7 @@ import {
 import { type ActiveRecordedSession, startRecordedSession } from "@/audio/sessionRecording";
 import { ensureEngineStarted, getEngine } from "@/audio/useAudioEngine";
 import { type ChordDef, getChord } from "@/data/chords";
+import { syncLearningSessionOrQueue } from "@/storage/pending-backend-sync";
 import type { TimedPracticeCountInBeats } from "@/storage/preferences";
 import { useProgress } from "@/storage/progress-store";
 import { useSettings } from "@/storage/settings-store";
@@ -22,6 +23,7 @@ import {
   type TimedPracticeStrumMarker,
   type TimedPracticeSummary,
   buildTimedPracticePlan,
+  buildTimedPracticeSessionSummary,
   summarizeTimedPractice,
 } from "./timed-practice";
 
@@ -82,6 +84,7 @@ export function useTimedChordPracticeSession(
 
   const metronomeRef = useRef<Metronome | null>(null);
   const recordingRef = useRef<ActiveRecordedSession | null>(null);
+  const sessionRef = useRef<{ id: string; startedAtIso: string } | null>(null);
   const activePlanRef = useRef<ActiveExpected[]>([]);
   const attemptsRef = useRef<TimedPracticeAttempt[]>([]);
   const hitExpectedRef = useRef<Set<number>>(new Set());
@@ -91,7 +94,6 @@ export function useTimedChordPracticeSession(
   const rafRef = useRef<number | null>(null);
   const startAudioTimeRef = useRef<number | null>(null);
   const secondsPerBeatRef = useRef(60 / config.bpm);
-  const startedAtIsoRef = useRef<string | null>(null);
   const sessionSavedRef = useRef(false);
 
   const settings = useSettings();
@@ -147,21 +149,31 @@ export function useTimedChordPracticeSession(
   );
 
   const finishSession = useCallback(async () => {
+    if (sessionRef.current === null && recordingRef.current === null && sessionSavedRef.current) {
+      return;
+    }
     clearTimers();
     pendingCapturesRef.current.clear();
     metronomeRef.current?.stop();
     metronomeRef.current = null;
+    const endedAtIso = new Date().toISOString();
+    const session = sessionRef.current ?? {
+      id: crypto.randomUUID(),
+      startedAtIso: new Date(Date.now() - 60_000).toISOString(),
+    };
     const finalAttempts = attemptsRef.current;
     const finalSummary = summarizeTimedPractice(finalAttempts);
+    const metadata = buildTimedPracticeSessionMetadata({
+      attempts: finalAttempts,
+      config,
+      summary: finalSummary,
+    });
+    const hadBackendSession = recordingRef.current !== null;
+    let backendStopFailed = false;
     try {
-      await recordingRef.current?.stop(
-        buildTimedPracticeSessionMetadata({
-          attempts: finalAttempts,
-          config,
-          summary: finalSummary,
-        }),
-      );
+      await recordingRef.current?.stop(metadata);
     } catch (err) {
+      backendStopFailed = true;
       console.error("session recording upload failed", err);
     } finally {
       recordingRef.current = null;
@@ -177,20 +189,41 @@ export function useTimedChordPracticeSession(
     activePlanRef.current = [];
     pendingCapturesRef.current.clear();
 
-    if (startedAtIsoRef.current && finalAttempts.length > 0 && !sessionSavedRef.current) {
+    if (!sessionSavedRef.current) {
       sessionSavedRef.current = true;
-      saveSession({
-        id: crypto.randomUUID(),
-        startedAtIso: startedAtIsoRef.current,
-        endedAtIso: new Date().toISOString(),
-        drillType: "timed-chord",
-        chords: config.chords.map((chord) => chord.id),
-        targetBpm: config.bpm,
-        averageScore: finalSummary.averageScore,
-        events: finalAttempts.length,
-      }).catch((err) => console.error("save timed practice session failed", err));
+      try {
+        await saveSession(
+          buildTimedPracticeSessionSummary({
+            id: session.id,
+            startedAtIso: session.startedAtIso,
+            endedAtIso,
+            chordIds: config.chords.map((chord) => chord.id),
+            bpm: config.bpm,
+            summary: finalSummary,
+          }),
+        );
+      } catch (err) {
+        console.error("save timed practice session failed", err);
+      }
     }
-  }, [clearTimers, config, saveSession]);
+
+    if (!hadBackendSession || backendStopFailed) {
+      const syncResult = await syncLearningSessionOrQueue(
+        {
+          sessionId: session.id,
+          activityType: "practice_drill",
+          startedAtIso: session.startedAtIso,
+          endedAtIso,
+          metadata,
+        },
+        settings,
+      );
+      if (!syncResult.synced) {
+        console.error("timed practice backend sync queued", syncResult.error);
+      }
+    }
+    sessionRef.current = null;
+  }, [clearTimers, config, saveSession, settings]);
 
   const createMiss = useCallback(
     (expected: ActiveExpected) => {
@@ -306,6 +339,8 @@ export function useTimedChordPracticeSession(
       pendingCapturesRef.current.clear();
       attemptsRef.current = [];
       sessionSavedRef.current = false;
+      const session = { id: crypto.randomUUID(), startedAtIso: new Date().toISOString() };
+      sessionRef.current = session;
       setAttempts([]);
       setStrumMarkers([]);
       setSummary(null);
@@ -323,6 +358,8 @@ export function useTimedChordPracticeSession(
       const chordById = new Map(config.chords.map((chord) => [chord.id, chord]));
 
       recordingRef.current = await startRecordedSession({
+        id: session.id,
+        startedAtIso: session.startedAtIso,
         engine,
         activityType: "practice_drill",
         settings,
@@ -344,6 +381,7 @@ export function useTimedChordPracticeSession(
       const metronome = new Metronome({
         bpm: config.bpm,
         audible: settings.metronomeAudible,
+        mode: settings.metronomeMode,
         volume: settings.metronomeVolume,
         onBeat: ({ beat }) => {
           if (config.countInBeats > 0 && beat < config.countInBeats) {
@@ -376,7 +414,6 @@ export function useTimedChordPracticeSession(
       activePlanRef.current = activePlan;
       setPlan(nextPlan);
       setStatus("running");
-      startedAtIsoRef.current = new Date().toISOString();
 
       for (const expected of activePlan) {
         const delayMs = Math.max(
@@ -401,6 +438,7 @@ export function useTimedChordPracticeSession(
       startPlayhead(ctx, totalBeats, config.countInBeats);
     } catch (err) {
       console.error(err);
+      sessionRef.current = null;
       setError(err instanceof Error ? err.message : "Could not start timed practice.");
       setStatus("idle");
       setPhase("idle");

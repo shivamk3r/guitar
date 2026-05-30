@@ -32,6 +32,11 @@ logger = logging.getLogger("guitar.worker")
 PRACTICE_SEGMENT_LEAD_SEC = 0.08
 PRACTICE_SEGMENT_MIN_SEC = 0.35
 PRACTICE_SEGMENT_MAX_SEC = 0.9
+TUNER_FRAME_SEC = 0.20
+TUNER_HOP_SEC = 0.08
+TUNER_MIN_HZ = 60.0
+TUNER_MAX_HZ = 500.0
+TUNER_IN_TUNE_CENTS = 5.0
 
 
 def complete_job(
@@ -78,11 +83,54 @@ def analyze_recording(
     storage: ObjectStorage | None = None,
     chord_detector: SolititoChordDetector | None = None,
 ) -> dict[str, Any]:
+    if recording.session.activity_type == "tuner":
+        return analyze_tuner_recording(recording, storage=storage)
     if recording.session.activity_type == "chord_check":
         return analyze_chord_check_recording(recording, storage=storage, chord_detector=chord_detector)
     if recording.session.activity_type == "practice_drill":
         return analyze_practice_drill_recording(recording, storage=storage, chord_detector=chord_detector)
     return placeholder_analysis(recording)
+
+
+def analyze_tuner_recording(
+    recording: models.AudioRecording,
+    *,
+    storage: ObjectStorage | None = None,
+) -> dict[str, Any]:
+    if not is_wav_content_type(recording.content_type):
+        return skipped_analysis(
+            recording,
+            skip_reason="unsupported_audio_content_type",
+            guidance="Recording captured. Backend tuner analysis currently requires WAV recordings.",
+            extra={"contentType": recording.content_type},
+        )
+
+    storage = storage or ObjectStorage()
+    audio = decode_wav_bytes(storage.get_recording(recording.object_key))
+    duration_sec = len(audio.samples) / audio.sample_rate if audio.sample_rate > 0 else 0.0
+    metadata = recording.session.client_metadata or {}
+    tuner = tuner_analysis_metrics(audio, metadata)
+    return {
+        "metrics": {
+            "placeholder": False,
+            "activity": recording.session.activity_type,
+            "size_bytes": recording.size_bytes,
+            "contentType": recording.content_type,
+            "durationSec": duration_sec,
+            "detector": {
+                "detector": "autocorrelation-tuner",
+                "modelId": "local-dsp-v1",
+                "modelRevision": "deterministic",
+            },
+            "capture": {
+                "hasSignal": tuner["voicedFrameCount"] > 0,
+                "captureStartSec": 0.0,
+                "captureEndSec": duration_sec,
+            },
+            "tuner": tuner,
+        },
+        "guidance": tuner_guidance(tuner),
+    }
 
 
 def analyze_chord_check_recording(
@@ -369,9 +417,158 @@ def skipped_analysis(
 
 
 def placeholder_guidance(recording: models.AudioRecording) -> str:
-    if recording.session.activity_type == "tuner":
-        return "Recording captured. Backend analysis is not available for tuner recordings yet."
     return "Recording captured. Backend analysis is not available for this activity yet."
+
+
+def tuner_analysis_metrics(audio: DecodedAudio, metadata: dict) -> dict[str, Any]:
+    frames = tuner_pitch_frames(audio)
+    voiced = [frame for frame in frames if frame["hz"] is not None]
+    hz_values = [float(frame["hz"]) for frame in voiced if isinstance(frame["hz"], (int, float))]
+    cents_values = [
+        float(frame["cents"]) for frame in voiced if isinstance(frame["cents"], (int, float))
+    ]
+    note_counts: dict[str, int] = {}
+    for frame in voiced:
+        note = string_value(frame.get("note"))
+        if note is not None:
+            note_counts[note] = note_counts.get(note, 0) + 1
+
+    stable_frames = [value for value in cents_values if abs(value) <= TUNER_IN_TUNE_CENTS]
+    tuning_result = metadata.get("tuningResult")
+    if not isinstance(tuning_result, dict):
+        tuning_result = {}
+    return {
+        "tuningId": string_value(tuning_result.get("tuningId")) or string_value(metadata.get("tuningId")),
+        "tuningName": string_value(tuning_result.get("tuningName")),
+        "frameCount": len(frames),
+        "voicedFrameCount": len(voiced),
+        "stableFrameCount": len(stable_frames),
+        "inTuneFrameRate": safe_rate(len(stable_frames), len(voiced)),
+        "medianHz": float(np.median(hz_values)) if hz_values else None,
+        "medianNote": most_common_note(note_counts),
+        "medianCents": float(np.median(cents_values)) if cents_values else None,
+        "meanAbsCents": float(np.mean(np.abs(cents_values))) if cents_values else None,
+        "centsStdDev": float(np.std(cents_values)) if cents_values else None,
+        "detectedNotes": [
+            {"note": note, "frames": count}
+            for note, count in sorted(note_counts.items(), key=lambda item: (-item[1], item[0]))
+        ],
+    }
+
+
+def tuner_pitch_frames(audio: DecodedAudio) -> list[dict[str, Any]]:
+    sample_rate = audio.sample_rate
+    samples = np.asarray(audio.samples, dtype=np.float64)
+    if sample_rate <= 0 or samples.size == 0:
+        return []
+    frame_size = max(512, int(sample_rate * TUNER_FRAME_SEC))
+    hop_size = max(256, int(sample_rate * TUNER_HOP_SEC))
+    if samples.size < frame_size:
+        samples = np.pad(samples, (0, frame_size - samples.size))
+    rms_values = [
+        frame_rms(samples[start : start + frame_size])
+        for start in range(0, samples.size - frame_size + 1, hop_size)
+    ]
+    max_rms = max(rms_values) if rms_values else 0.0
+    rms_threshold = max(0.003, max_rms * 0.15)
+
+    frames: list[dict[str, Any]] = []
+    for frame_index, start in enumerate(range(0, samples.size - frame_size + 1, hop_size)):
+        frame = samples[start : start + frame_size]
+        rms = frame_rms(frame)
+        hz = estimate_frame_pitch_hz(frame, sample_rate) if rms >= rms_threshold else None
+        note = None
+        cents = None
+        if hz is not None:
+            note, cents = note_and_cents(hz)
+        frames.append(
+            {
+                "index": frame_index,
+                "startSec": start / sample_rate,
+                "rms": rms,
+                "hz": hz,
+                "note": note,
+                "cents": cents,
+            }
+        )
+    return frames
+
+
+def estimate_frame_pitch_hz(frame: np.ndarray, sample_rate: int) -> float | None:
+    centered = frame - np.mean(frame)
+    if frame_rms(centered) <= 1e-6:
+        return None
+    windowed = centered * np.hanning(centered.size)
+    correlation = np.correlate(windowed, windowed, mode="full")[centered.size - 1 :]
+    if correlation.size == 0 or correlation[0] <= 0:
+        return None
+    min_lag = max(1, int(sample_rate / TUNER_MAX_HZ))
+    max_lag = min(correlation.size - 1, int(sample_rate / TUNER_MIN_HZ))
+    if max_lag <= min_lag:
+        return None
+    search = correlation[min_lag : max_lag + 1]
+    lag = min_lag + int(np.argmax(search))
+    if correlation[lag] < correlation[0] * 0.12:
+        return None
+    refined_lag = parabolic_lag(correlation, lag)
+    if refined_lag <= 0:
+        return None
+    hz = sample_rate / refined_lag
+    if hz < TUNER_MIN_HZ or hz > TUNER_MAX_HZ:
+        return None
+    return float(hz)
+
+
+def parabolic_lag(correlation: np.ndarray, lag: int) -> float:
+    if lag <= 0 or lag >= correlation.size - 1:
+        return float(lag)
+    left = correlation[lag - 1]
+    center = correlation[lag]
+    right = correlation[lag + 1]
+    denominator = left - 2 * center + right
+    if abs(denominator) < 1e-12:
+        return float(lag)
+    return float(lag + 0.5 * (left - right) / denominator)
+
+
+def note_and_cents(hz: float) -> tuple[str, float]:
+    midi_float = 69 + 12 * np.log2(hz / 440.0)
+    nearest_midi = int(round(midi_float))
+    cents = (midi_float - nearest_midi) * 100
+    note_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+    note = note_names[nearest_midi % 12]
+    octave = nearest_midi // 12 - 1
+    return f"{note}{octave}", float(cents)
+
+
+def tuner_guidance(tuner: dict[str, Any]) -> str:
+    voiced = int(tuner["voicedFrameCount"])
+    if voiced == 0:
+        return "Backend tuner analysis could not find a stable pitched signal in this recording."
+    note = string_value(tuner.get("medianNote")) or "the detected note"
+    in_tune = float(tuner["inTuneFrameRate"])
+    mean_abs_cents = number_value(tuner.get("meanAbsCents"))
+    if in_tune >= 0.75:
+        return f"Backend tuner analysis found {note} stable and in tune for {in_tune:.0%} of voiced frames."
+    if mean_abs_cents is not None and mean_abs_cents <= 15:
+        return f"Backend tuner analysis found {note} close, averaging {mean_abs_cents:.1f} cents from center."
+    return "Backend tuner analysis found pitch drift. Pluck one string at a time and let it ring steadily."
+
+
+def most_common_note(note_counts: dict[str, int]) -> str | None:
+    if not note_counts:
+        return None
+    return max(note_counts.items(), key=lambda item: (item[1], item[0]))[0]
+
+
+def frame_rms(frame: np.ndarray) -> float:
+    if frame.size == 0:
+        return 0.0
+    return float(np.sqrt(np.mean(np.square(frame))))
+
+
+def safe_rate(numerator: int, denominator: int) -> float:
+    return numerator / denominator if denominator > 0 else 0.0
 
 
 def practice_guidance(practice: dict[str, Any]) -> str:

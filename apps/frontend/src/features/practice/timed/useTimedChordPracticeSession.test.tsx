@@ -1,5 +1,6 @@
 import { startRecordedSession } from "@/audio/sessionRecording";
 import { getChord } from "@/data/chords";
+import { syncLearningSessionOrQueue } from "@/storage/pending-backend-sync";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -38,6 +39,11 @@ const metronomeMock = vi.hoisted(() => ({
   instances: [] as Array<{ emitBeat: (beat: number) => void }>,
 }));
 
+const progressMock = vi.hoisted(() => ({
+  recordTransition: vi.fn(async () => {}),
+  saveSession: vi.fn(async () => {}),
+}));
+
 let rafCallback: FrameRequestCallback | null = null;
 
 vi.mock("@/audio/useAudioEngine", () => {
@@ -61,6 +67,18 @@ vi.mock("@/audio/useAudioEngine", () => {
 
 vi.mock("@/audio/sessionRecording", () => ({
   startRecordedSession: vi.fn(async () => null),
+}));
+
+vi.mock("@/storage/pending-backend-sync", () => ({
+  syncLearningSessionOrQueue: vi.fn(async () => ({
+    synced: false,
+    queued: true,
+    error: "offline",
+  })),
+}));
+
+vi.mock("@/storage/progress-store", () => ({
+  useProgress: vi.fn((selector: (state: typeof progressMock) => unknown) => selector(progressMock)),
 }));
 
 vi.mock("../metronome", () => {
@@ -111,7 +129,10 @@ describe("useTimedChordPracticeSession count-in", () => {
     vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
     engineMock.reset();
     metronomeMock.instances.length = 0;
+    progressMock.recordTransition.mockClear();
+    progressMock.saveSession.mockClear();
     vi.mocked(startRecordedSession).mockClear();
+    vi.mocked(syncLearningSessionOrQueue).mockClear();
   });
 
   afterEach(() => {
@@ -180,6 +201,44 @@ describe("useTimedChordPracticeSession count-in", () => {
     expect(vi.mocked(startRecordedSession)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(startRecordedSession).mock.calls[0]?.[0].metadata).not.toHaveProperty(
       "audioInputDeviceId",
+    );
+  });
+
+  it("uses one client session id for local history and queued backend sync", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { result } = renderHook(() => useTimedChordPracticeSession(configWithCountIn(0)));
+
+    await act(async () => {
+      await result.current.start();
+    });
+
+    const startPayload = vi.mocked(startRecordedSession).mock.calls[0]?.[0];
+    expect(startPayload?.id).toEqual(expect.any(String));
+    expect(startPayload?.startedAtIso).toEqual(expect.any(String));
+
+    await act(async () => {
+      await result.current.stop();
+    });
+
+    expect(progressMock.saveSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: startPayload?.id,
+        startedAtIso: startPayload?.startedAtIso,
+        drillType: "timed-chord",
+      }),
+    );
+    expect(syncLearningSessionOrQueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: startPayload?.id,
+        activityType: "practice_drill",
+        startedAtIso: startPayload?.startedAtIso,
+        metadata: expect.objectContaining({
+          practiceMode: "timed_chord_practice",
+          bpm: 120,
+          countInBeats: 0,
+        }),
+      }),
+      expect.anything(),
     );
   });
 });

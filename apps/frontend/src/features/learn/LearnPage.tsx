@@ -1,4 +1,6 @@
+import { LESSONS, lessonProgress } from "@/data/curriculum";
 import { GLOSSARY_CATEGORIES, type GlossaryCategory, filterGlossaryTerms } from "@/data/glossary";
+import { useProgress } from "@/storage/progress-store";
 import { clsx } from "@/ui/clsx";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -8,7 +10,18 @@ type CategoryFilter = GlossaryCategory | "All";
 export function LearnPage() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<CategoryFilter>("All");
+  const progressItems = useProgress((state) => state.progressItems);
   const terms = useMemo(() => filterGlossaryTerms({ query, category }), [query, category]);
+  const lessons = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return LESSONS;
+    return LESSONS.filter(
+      (lesson) =>
+        lesson.title.toLowerCase().includes(normalized) ||
+        lesson.area.toLowerCase().includes(normalized) ||
+        lesson.summary.toLowerCase().includes(normalized),
+    );
+  }, [query]);
 
   return (
     <section>
@@ -16,8 +29,7 @@ export function LearnPage() {
         <div>
           <h1 className="text-2xl font-semibold">Learn</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted">
-            Beginner-friendly guitar words with tiny browser-only lessons, animations, and audio
-            examples.
+            Structured local lessons, glossary terms, browser visuals, and practice links.
           </p>
         </div>
         <label className="text-sm text-muted">
@@ -31,6 +43,36 @@ export function LearnPage() {
           />
         </label>
       </header>
+
+      <section className="mb-8">
+        <h2 className="mb-3 text-sm uppercase tracking-wide text-muted">Lessons</h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {lessons.map((lesson) => {
+            const progress = lessonProgress(progressItems, lesson.id);
+            return (
+              <Link
+                key={lesson.id}
+                to={`/learn/lessons/${lesson.id}`}
+                className="flex min-h-48 flex-col rounded-lg border border-white/5 bg-panel p-4 transition-colors hover:border-white/15"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="text-lg font-semibold">{lesson.title}</h3>
+                  <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-xs text-muted">
+                    {lesson.area}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-muted">{lesson.summary}</p>
+                <div className="mt-auto flex items-center justify-between pt-4 text-sm">
+                  <span className="text-muted">{lesson.estimatedMinutes} min</span>
+                  <span className="text-accent">
+                    {progress?.status === "mastered" ? "Review" : "Open lesson"}
+                  </span>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
 
       <div className="mb-6 flex flex-wrap gap-2" aria-label="Glossary categories">
         {(["All", ...GLOSSARY_CATEGORIES] as const).map((option) => (
@@ -52,24 +94,27 @@ export function LearnPage() {
       </div>
 
       {terms.length > 0 ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {terms.map((term) => (
-            <Link
-              key={term.id}
-              to={`/learn/${term.id}`}
-              className="flex min-h-40 flex-col rounded-lg border border-white/5 bg-panel p-4 transition-colors hover:border-white/15"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-lg font-semibold">{term.term}</h2>
-                <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-xs text-muted">
-                  {term.category}
-                </span>
-              </div>
-              <p className="mt-3 text-sm leading-6 text-muted">{term.shortDefinition}</p>
-              <div className="mt-auto pt-4 text-sm text-accent">Open lesson</div>
-            </Link>
-          ))}
-        </div>
+        <>
+          <h2 className="mb-3 text-sm uppercase tracking-wide text-muted">Glossary</h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {terms.map((term) => (
+              <Link
+                key={term.id}
+                to={`/learn/${term.id}`}
+                className="flex min-h-40 flex-col rounded-lg border border-white/5 bg-panel p-4 transition-colors hover:border-white/15"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-lg font-semibold">{term.term}</h2>
+                  <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-xs text-muted">
+                    {term.category}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-muted">{term.shortDefinition}</p>
+                <div className="mt-auto pt-4 text-sm text-accent">Open lesson</div>
+              </Link>
+            ))}
+          </div>
+        </>
       ) : (
         <div className="rounded-lg border border-white/5 bg-panel p-6 text-sm text-muted">
           No glossary terms match that search.

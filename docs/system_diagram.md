@@ -4,10 +4,11 @@
 flowchart LR
   subgraph Browser["Browser - React frontend"]
     UI["React app"]
+    Today["Today plan, lessons, songs, progress"]
     MicSelect["Audio input selector"]
     Worklet["AudioWorklet realtime DSP"]
     Recorder["Raw PCM session recorder"]
-    IndexedDB["IndexedDB settings, anonymous learner id"]
+    IndexedDB["IndexedDB profile, settings, progress, songs, sessions, notes, pending sync, learner id"]
   end
 
   subgraph Backend["FastAPI backend"]
@@ -28,16 +29,20 @@ flowchart LR
     Worker["Python analysis worker"]
   end
 
+  UI --> Today
+  Today --> IndexedDB
   UI --> MicSelect
   MicSelect -->|"selected mic stream"| Worklet
   UI -->|"consent and session state"| IndexedDB
   UI -->|"raw WAV after explicit consent"| Recorder
   Recorder -->|"POST /v1/sessions/{id}/recordings"| API
-  UI -->|"learners, consent, sessions, history, progress"| API
+  UI -->|"profile, consent, sessions, journal, path, plan, songs, history, progress"| API
+  IndexedDB -.->|"retry completed local session sync"| API
   API -->|"recording playback for consented audio"| UI
 
   API --> Models
   Models --> Postgres
+  API -->|"recording export/delete metadata"| Postgres
   API -->|"store audio object"| MinIO
   API -->|"enqueue analysis job"| SQS
   SQS --> Worker

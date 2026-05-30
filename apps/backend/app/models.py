@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -23,6 +23,24 @@ class Learner(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     sessions: Mapped[list["LearningSession"]] = relationship(back_populates="learner")
+
+
+class LearnerProfile(Base):
+    __tablename__ = "learner_profiles"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    learner_id: Mapped[str] = mapped_column(ForeignKey("learners.id"), unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(80), default="Local Learner")
+    skill_level: Mapped[str] = mapped_column(String(32), default="new")
+    goals: Mapped[list[str]] = mapped_column(JSON, default=list)
+    handedness: Mapped[str] = mapped_column(String(16), default="right")
+    instrument_preference: Mapped[str] = mapped_column(String(32), default="acoustic")
+    daily_practice_target_minutes: Mapped[int] = mapped_column(Integer, default=20)
+    preferred_genres: Mapped[list[str]] = mapped_column(JSON, default=list)
+    recording_consent_granted: Mapped[bool] = mapped_column(Boolean, default=False)
+    onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
 class RecordingConsent(Base):
@@ -50,6 +68,28 @@ class LearningSession(Base):
     recordings: Mapped[list["AudioRecording"]] = relationship(back_populates="session")
 
 
+class LearnerProgressItem(Base):
+    __tablename__ = "learner_progress_items"
+    __table_args__ = (UniqueConstraint("learner_id", "item_type", "item_id", name="uq_progress_item"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    learner_id: Mapped[str] = mapped_column(ForeignKey("learners.id"), index=True)
+    item_type: Mapped[str] = mapped_column(String(48), index=True)
+    item_id: Mapped[str] = mapped_column(String(128), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="ready")
+    mastery: Mapped[float] = mapped_column(Float, default=0.0)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    minutes: Mapped[int] = mapped_column(Integer, default=0)
+    best_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    last_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bpm_ceiling: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_practiced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    progress_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
 class AudioRecording(Base):
     __tablename__ = "audio_recordings"
 
@@ -65,6 +105,20 @@ class AudioRecording(Base):
 
     session: Mapped[LearningSession] = relationship(back_populates="recordings")
     analysis_jobs: Mapped[list["AnalysisJob"]] = relationship(back_populates="recording")
+
+
+class RecordingRetention(Base):
+    __tablename__ = "recording_retention"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    recording_id: Mapped[str] = mapped_column(ForeignKey("audio_recordings.id"), unique=True, index=True)
+    learner_id: Mapped[str] = mapped_column(ForeignKey("learners.id"), index=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    delete_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    exported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    export_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
 class AnalysisJob(Base):
@@ -93,3 +147,16 @@ class AnalysisResult(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     job: Mapped[AnalysisJob] = relationship(back_populates="result")
+
+
+class JournalEntry(Base):
+    __tablename__ = "journal_entries"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    learner_id: Mapped[str] = mapped_column(ForeignKey("learners.id"), index=True)
+    session_id: Mapped[str | None] = mapped_column(ForeignKey("learning_sessions.id"), index=True, nullable=True)
+    body: Mapped[str] = mapped_column(Text)
+    mood: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    focus: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)

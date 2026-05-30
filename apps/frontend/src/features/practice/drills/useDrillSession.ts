@@ -8,12 +8,14 @@ import {
 import { type ActiveRecordedSession, startRecordedSession } from "@/audio/sessionRecording";
 import { ensureEngineStarted, getEngine } from "@/audio/useAudioEngine";
 import { type ChordDef, getChord } from "@/data/chords";
+import { syncLearningSessionOrQueue } from "@/storage/pending-backend-sync";
 import { useProgress } from "@/storage/progress-store";
 import { useSettings } from "@/storage/settings-store";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Metronome } from "../metronome";
 import { type DrillEvent, usePractice } from "../practice-store";
 import { type ScoredEvent, scoreEvent } from "../scoring";
+import { buildPracticeDrillSessionSummary } from "./drill-session";
 
 export interface DrillConfig {
   chords: ChordDef[];
@@ -67,9 +69,11 @@ export function useDrillSession(config: DrillConfig): UseDrillSession {
   const chordsRef = useRef(config.chords);
   const beatsPerChangeRef = useRef(config.beatsPerChange);
   const attemptsRef = useRef<DrillAttemptMetadata[]>([]);
+  const sessionRef = useRef<{ id: string; startedAtIso: string } | null>(null);
   const settings = useSettings();
   const recordEvent = usePractice((s) => s.recordEvent);
   const recordTransition = useProgress((s) => s.recordTransition);
+  const saveSession = useProgress((s) => s.saveSession);
 
   chordsRef.current = config.chords;
   beatsPerChangeRef.current = config.beatsPerChange;
@@ -136,9 +140,11 @@ export function useDrillSession(config: DrillConfig): UseDrillSession {
       const engine = await ensureEngineStarted();
       const ctx = engine.ctx;
       if (!ctx) throw new Error("audio context not available");
+      const session = { id: crypto.randomUUID(), startedAtIso: new Date().toISOString() };
       const metronome = new Metronome({
         bpm,
         audible: settings.metronomeAudible,
+        mode: settings.metronomeMode,
         volume: settings.metronomeVolume,
         onBeat: ({ beat }) => {
           setCurrentBeat(beat);
@@ -153,7 +159,10 @@ export function useDrillSession(config: DrillConfig): UseDrillSession {
       metronomeRef.current = metronome;
       usePractice.getState().reset();
       attemptsRef.current = [];
+      sessionRef.current = session;
       recordingRef.current = await startRecordedSession({
+        id: session.id,
+        startedAtIso: session.startedAtIso,
         engine,
         activityType: "practice_drill",
         settings,
@@ -181,28 +190,67 @@ export function useDrillSession(config: DrillConfig): UseDrillSession {
   const stop = useCallback(async () => {
     metronomeRef.current?.stop();
     metronomeRef.current = null;
+    const endedAtIso = new Date().toISOString();
+    const session = sessionRef.current ?? {
+      id: crypto.randomUUID(),
+      startedAtIso: new Date(Date.now() - 60_000).toISOString(),
+    };
+    const practiceMode = config.practiceMode ?? "chord_change_drill";
+    const metadata = buildDrillSessionMetadata({
+      attempts: attemptsRef.current,
+      beatsPerChange: beatsPerChangeRef.current,
+      bpm,
+      chords: chordsRef.current,
+      practiceMode,
+      title: config.title,
+    });
+    const hadBackendSession = recordingRef.current !== null;
+    let backendStopFailed = false;
     try {
-      await recordingRef.current?.stop(
-        buildDrillSessionMetadata({
-          attempts: attemptsRef.current,
-          beatsPerChange: beatsPerChangeRef.current,
-          bpm,
-          chords: chordsRef.current,
-          practiceMode: config.practiceMode ?? "chord_change_drill",
-          title: config.title,
-        }),
-      );
+      await recordingRef.current?.stop(metadata);
     } catch (err) {
+      backendStopFailed = true;
       console.error("session recording upload failed", err);
     } finally {
       recordingRef.current = null;
+    }
+    try {
+      await saveSession(
+        buildPracticeDrillSessionSummary({
+          id: session.id,
+          startedAtIso: session.startedAtIso,
+          endedAtIso,
+          practiceMode,
+          chords: chordsRef.current,
+          bpm,
+          attempts: attemptsRef.current,
+        }),
+      );
+    } catch (err) {
+      console.error("local drill session save failed", err);
+    }
+    if (!hadBackendSession || backendStopFailed) {
+      const syncResult = await syncLearningSessionOrQueue(
+        {
+          sessionId: session.id,
+          activityType: "practice_drill",
+          startedAtIso: session.startedAtIso,
+          endedAtIso,
+          metadata,
+        },
+        settings,
+      );
+      if (!syncResult.synced) {
+        console.error("practice drill backend sync queued", syncResult.error);
+      }
     }
     await getEngine().stop();
     setRunning(false);
     chordIndexRef.current = 0;
     setCurrentIndex(0);
     setCurrentBeat(0);
-  }, [bpm, config.practiceMode, config.title]);
+    sessionRef.current = null;
+  }, [bpm, config.practiceMode, config.title, saveSession, settings]);
 
   // Subscribe to audio events while running
   useEffect(() => {
@@ -237,9 +285,10 @@ export function useDrillSession(config: DrillConfig): UseDrillSession {
     metronomeRef.current?.setOptions({
       bpm,
       audible: settings.metronomeAudible,
+      mode: settings.metronomeMode,
       volume: settings.metronomeVolume,
     });
-  }, [bpm, settings.metronomeAudible, settings.metronomeVolume]);
+  }, [bpm, settings.metronomeAudible, settings.metronomeMode, settings.metronomeVolume]);
 
   // Cleanup on unmount
   useEffect(() => {

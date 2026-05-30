@@ -3,13 +3,20 @@ import { ChordLibraryPage } from "@/features/chord-library/ChordLibraryPage";
 import { HistoryPage } from "@/features/history/HistoryPage";
 import { ConceptPage } from "@/features/learn/ConceptPage";
 import { LearnPage } from "@/features/learn/LearnPage";
+import { LessonPage } from "@/features/learn/LessonPage";
 import { PracticePage } from "@/features/practice/PracticePage";
+import { TechniquePracticePage } from "@/features/practice/TechniquePracticePage";
 import { ChordChangeDrillPage } from "@/features/practice/drills/ChordChangeDrillPage";
 import { ProgressionDrillPage } from "@/features/practice/drills/ProgressionDrillPage";
 import { StrummingDrillPage } from "@/features/practice/drills/StrummingDrillPage";
 import { TimedChordPracticePage } from "@/features/practice/timed/TimedChordPracticePage";
+import { ProgressPage } from "@/features/progress/ProgressPage";
 import { SettingsPage } from "@/features/settings/SettingsPage";
+import { SongsPage } from "@/features/songs/SongsPage";
+import { TodayPage } from "@/features/today/TodayPage";
+import { ToolsPage } from "@/features/tools/ToolsPage";
 import { TunerPage } from "@/features/tuner/TunerPage";
+import { restoreBackendAccount } from "@/storage/backend-account-sync";
 import { useProgress } from "@/storage/progress-store";
 import { useSettings } from "@/storage/settings-store";
 import { FloatingAudioInputControl } from "@/ui/FloatingAudioInputControl";
@@ -39,8 +46,9 @@ export function App() {
   const hydrateProgress = useProgress((s) => s.hydrate);
 
   useEffect(() => {
-    hydrateSettings().catch((err) => console.error("settings hydrate failed", err));
-    hydrateProgress().catch((err) => console.error("progress hydrate failed", err));
+    Promise.all([hydrateSettings(), hydrateProgress()])
+      .then(() => restoreBackendAccount())
+      .catch((err) => console.error("local account restore failed", err));
   }, [hydrateSettings, hydrateProgress]);
 
   return (
@@ -51,11 +59,13 @@ export function App() {
             Guitar Coach
           </Link>
           <nav aria-label="Primary" className="flex gap-1 ml-2 shrink-0">
-            <NavItem to="/" label="Tuner" />
-            <NavItem to="/chords" label="Chord Library" />
-            <NavItem to="/practice" label="Practice" />
+            <NavItem to="/" label="Today" />
             <NavItem to="/learn" label="Learn" />
+            <NavItem to="/practice" label="Practice" />
+            <NavItem to="/songs" label="Songs" />
+            <NavItem to="/progress" label="Progress" />
             <NavItem to="/history" label="History" />
+            <NavItem to="/tools" label="Tools" />
           </nav>
           <div className="ml-auto shrink-0">
             <NavItem to="/settings" label="Settings" />
@@ -66,16 +76,24 @@ export function App() {
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-6">
         <Suspense fallback={<div className="text-muted">Loading…</div>}>
           <Routes>
-            <Route path="/" element={<TunerPage />} />
+            <Route path="/" element={<TodayPage />} />
             <Route path="/chords" element={<ChordLibraryPage />} />
             <Route path="/chords/:id" element={<ChordDetailPage />} />
             <Route path="/practice" element={<PracticePage />} />
+            <Route path="/practice/technique" element={<TechniquePracticePage />} />
             <Route path="/practice/timed-chords" element={<TimedChordPracticePage />} />
             <Route path="/practice/chord-change" element={<ChordChangeDrillPage />} />
             <Route path="/practice/progression/:id" element={<ProgressionDrillPage />} />
             <Route path="/practice/strumming" element={<StrummingDrillPage />} />
             <Route path="/learn" element={<LearnPage />} />
+            <Route path="/learn/lessons/:lessonId" element={<LessonPage />} />
             <Route path="/learn/:id" element={<ConceptPage />} />
+            <Route path="/songs" element={<SongsPage />} />
+            <Route path="/songs/:songId" element={<SongsPage />} />
+            <Route path="/progress" element={<ProgressPage />} />
+            <Route path="/tools" element={<ToolsPage />} />
+            <Route path="/tools/tuner" element={<TunerPage />} />
+            <Route path="/tuner" element={<TunerPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/history/:sessionId" element={<HistoryPage />} />
             <Route path="/settings" element={<SettingsPage />} />

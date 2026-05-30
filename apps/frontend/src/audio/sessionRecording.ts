@@ -21,8 +21,10 @@ interface SessionRecorder {
 }
 
 export async function startActivitySession(input: {
+  id?: string;
   engine: AudioEngine;
   activityType: ActivityType;
+  startedAtIso?: string;
   settings: Pick<
     SettingsRow,
     "learnerId" | "anonymousLearnerId" | "recordingConsentGranted" | "recordingConsentPolicyVersion"
@@ -51,8 +53,10 @@ export async function startActivitySession(input: {
   }
 
   const session = await startLearningSession({
+    ...(input.id ? { id: input.id } : {}),
     learnerId: learner.id,
     activityType: input.activityType,
+    ...(input.startedAtIso ? { startedAtIso: input.startedAtIso } : {}),
     metadata: {
       recordingConsentGranted: input.settings.recordingConsentGranted,
       consentPolicyVersion: input.settings.recordingConsentPolicyVersion,

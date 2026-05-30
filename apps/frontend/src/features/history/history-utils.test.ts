@@ -1,4 +1,5 @@
 import type { RecordingAnalysisSummary, SessionHistoryItem } from "@/api/client";
+import type { SessionSummary } from "@/storage/db";
 import { describe, expect, it } from "vitest";
 import {
   activityLabel,
@@ -8,6 +9,8 @@ import {
   getAttempts,
   getConfigRows,
   getScoreRows,
+  localSessionToHistoryItem,
+  mergeHistorySessions,
   timelineResult,
 } from "./history-utils";
 
@@ -15,6 +18,11 @@ describe("history utilities", () => {
   it("labels activity subtypes from saved metadata", () => {
     expect(activityLabel("tuner", {})).toBe("Tuning");
     expect(activityLabel("chord_check", {})).toBe("Chord check");
+    expect(activityLabel("lesson", {})).toBe("Lesson");
+    expect(activityLabel("song_practice", {})).toBe("Song practice");
+    expect(activityLabel("ear_training", {})).toBe("Ear training");
+    expect(activityLabel("fretboard_trainer", {})).toBe("Fretboard trainer");
+    expect(activityLabel("technique_drill", {})).toBe("Technique practice");
     expect(activityLabel("practice_drill", { practiceMode: "timed_chord_practice" })).toBe(
       "Timed chord practice",
     );
@@ -49,6 +57,19 @@ describe("history utilities", () => {
         bpm: 72,
         beatsPerChord: 4,
         sessionLength: 12,
+        targetTitle: "A minor pentatonic box",
+        targetArea: "Lead",
+        lessonTitle: "Tuning basics",
+        lessonArea: "Foundations",
+        songTitle: "Open Road Study",
+        sectionName: "Verse",
+        bars: 8,
+        trainerTitle: "Major/minor quality",
+        promptId: "c-major",
+        answer: "major",
+        expected: "minor",
+        focus: "Alternate picking",
+        notes: "Even on string pairs.",
         scoreSummary: {
           averageScore: 7.5,
           bestScore: 9,
@@ -73,6 +94,19 @@ describe("history utilities", () => {
         { label: "Chords", value: "A, D" },
         { label: "BPM", value: "72" },
         { label: "Beats per chord", value: "4" },
+        { label: "Target", value: "A minor pentatonic box" },
+        { label: "Target area", value: "Lead" },
+        { label: "Lesson", value: "Tuning basics" },
+        { label: "Area", value: "Foundations" },
+        { label: "Song", value: "Open Road Study" },
+        { label: "Section", value: "Verse" },
+        { label: "Bars", value: "8" },
+        { label: "Trainer", value: "Major/minor quality" },
+        { label: "Prompt", value: "c-major" },
+        { label: "Answer", value: "major" },
+        { label: "Expected", value: "minor" },
+        { label: "Focus", value: "Alternate picking" },
+        { label: "Notes", value: "Even on string pairs." },
       ]),
     );
     expect(getScoreRows(item)).toEqual(
@@ -115,6 +149,80 @@ describe("history utilities", () => {
       "Backend analyzed 96/96 attempts · 48 accepted, 12 rejected, 36 uncertain",
     );
   });
+
+  it("formats backend tuner analysis summaries", () => {
+    expect(
+      analysisResultText(
+        analysisSummary({
+          result: "tuning_analyzed",
+          attempt_count: null,
+          analyzed_attempt_count: null,
+          accepted_count: null,
+          rejected_count: null,
+          uncertain_count: null,
+          tuner_note: "A2",
+          tuner_in_tune_rate: 0.84,
+          tuner_mean_abs_cents: 2.4,
+        }),
+      ),
+    ).toBe("Backend tuning analysis · heard A2 · 84% centered · 2.4 cents avg");
+  });
+
+  it("maps local IndexedDB sessions into history rows and lets backend rows win by id", () => {
+    const local = localSessionToHistoryItem(
+      localSession({
+        id: "session-1",
+        drillType: "technique",
+        averageScore: 8.5,
+        targetBpm: 72,
+      }),
+      null,
+    );
+    const backend = historyItem({
+      id: "session-1",
+      activity_type: "technique_drill",
+      client_metadata: { targetTitle: "A minor pentatonic box" },
+      score: 9,
+      result_summary: "Backend row",
+    });
+
+    expect(local).toMatchObject({
+      learner_id: "local-learner",
+      activity_type: "technique_drill",
+      score: 8.5,
+      recording_available: false,
+    });
+    expect(local.client_metadata).toMatchObject({
+      localOnly: true,
+      practiceMode: "technique_practice",
+      bpm: 72,
+    });
+
+    expect(mergeHistorySessions([local], [backend])).toEqual([backend]);
+  });
+
+  it("maps stopped local sessions without inventing a score", () => {
+    const local = localSessionToHistoryItem(
+      localSession({
+        drillType: "song-practice",
+        averageScore: 0,
+        completionStatus: "stopped",
+        resultSummary: "Verse stopped at 68 BPM",
+      }),
+      "learner-1",
+    );
+
+    expect(local).toMatchObject({
+      activity_type: "song_practice",
+      completion_status: "stopped",
+      score: null,
+      result_summary: "Verse stopped at 68 BPM",
+    });
+    expect(local.client_metadata).toMatchObject({
+      completionStatus: "stopped",
+      resultSummary: "Verse stopped at 68 BPM",
+    });
+  });
 });
 
 function historyItem(patch: Partial<SessionHistoryItem>): SessionHistoryItem {
@@ -135,12 +243,29 @@ function historyItem(patch: Partial<SessionHistoryItem>): SessionHistoryItem {
   };
 }
 
+function localSession(patch: Partial<SessionSummary>): SessionSummary {
+  return {
+    id: "local-session",
+    startedAtIso: "2026-05-28T12:00:00.000Z",
+    endedAtIso: "2026-05-28T12:08:00.000Z",
+    drillType: "timed-chord",
+    chords: ["G", "C"],
+    targetBpm: 70,
+    averageScore: 7.5,
+    events: 8,
+    ...patch,
+  };
+}
+
 function analysisSummary(patch: Partial<RecordingAnalysisSummary>): RecordingAnalysisSummary {
   return {
     status: "completed",
     result: "analyzed",
     guidance: null,
     score: null,
+    tuner_note: null,
+    tuner_in_tune_rate: null,
+    tuner_mean_abs_cents: null,
     target_chord_id: null,
     predicted_chord_id: null,
     confidence: null,

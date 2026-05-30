@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test.describe("tuner", () => {
   test("start listening button shows privacy message and mic request text", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/tools/tuner");
     await expect(page.getByText(/The tuner needs microphone access/i)).toBeVisible();
     await expect(page.getByText(/Recording only starts if you enabled consent/i)).toBeVisible();
     await expect(page.getByLabel("Microphone")).toBeVisible();
@@ -11,7 +11,7 @@ test.describe("tuner", () => {
   });
 
   test("shows the pitch stability trace while listening", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/tools/tuner");
     await page.getByRole("button", { name: "Start listening" }).click();
 
     await expect(page.getByRole("button", { name: "Stop" })).toBeVisible();
@@ -24,7 +24,7 @@ test.describe("tuner", () => {
   });
 
   test("tuning selector shows the alternate tunings", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/tools/tuner");
     const select = page.getByLabel(/Tuning/i);
     await expect(select).toBeVisible();
     await expect(select).toContainText("Standard");

@@ -52,6 +52,61 @@ def test_complete_job_writes_placeholder_result(tmp_path: Path) -> None:
     assert result.metrics["activity"] == "tuner"
 
 
+def test_complete_job_analyzes_tuner_wav_recording(tmp_path: Path) -> None:
+    engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'worker-tuner.db'}")
+    Base.metadata.create_all(bind=engine)
+    session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+    body = sine_wav_bytes(hz=110.0, duration_sec=1.2)
+
+    with session_local() as db:
+        learner = models.Learner(anonymous_id="anonymous-worker-tuner-test")
+        db.add(learner)
+        db.flush()
+        session = models.LearningSession(
+            learner_id=learner.id,
+            activity_type="tuner",
+            client_metadata={
+                "tuningResult": {
+                    "tuningId": "standard",
+                    "tuningName": "Standard",
+                },
+            },
+        )
+        db.add(session)
+        db.flush()
+        recording = models.AudioRecording(
+            session_id=session.id,
+            learner_id=learner.id,
+            object_key="recordings/test.wav",
+            bucket="test-recordings",
+            content_type="audio/wav",
+            size_bytes=len(body),
+        )
+        db.add(recording)
+        db.flush()
+        job = models.AnalysisJob(recording_id=recording.id, status="queued")
+        db.add(job)
+        db.commit()
+
+        complete_job(db, job.id, recording.id, storage=FakeStorage(body))
+
+        completed_job = db.get(models.AnalysisJob, job.id)
+        result = db.scalar(select(models.AnalysisResult).where(models.AnalysisResult.job_id == job.id))
+
+    assert completed_job is not None
+    assert completed_job.status == "completed"
+    assert result is not None
+    assert result.metrics["placeholder"] is False
+    assert result.metrics["detector"]["detector"] == "autocorrelation-tuner"
+    tuner = result.metrics["tuner"]
+    assert tuner["tuningId"] == "standard"
+    assert tuner["medianNote"] == "A2"
+    assert tuner["medianHz"] == pytest.approx(110.0, rel=0.02)
+    assert tuner["inTuneFrameRate"] > 0.8
+    assert tuner["meanAbsCents"] < 2
+    assert "stable" in result.guidance
+
+
 def test_complete_job_analyzes_chord_check_wav_recording(tmp_path: Path) -> None:
     engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'worker-chord.db'}")
     Base.metadata.create_all(bind=engine)
@@ -285,4 +340,13 @@ def wav_bytes(duration_sec: float = 0.1) -> bytes:
     output = BytesIO()
     samples = np.zeros(max(1, int(16_000 * duration_sec)), dtype=np.float32)
     wavfile.write(output, 16_000, samples)
+    return output.getvalue()
+
+
+def sine_wav_bytes(*, hz: float, duration_sec: float) -> bytes:
+    output = BytesIO()
+    sample_rate = 16_000
+    t = np.arange(max(1, int(sample_rate * duration_sec)), dtype=np.float64) / sample_rate
+    samples = (0.35 * np.sin(2 * np.pi * hz * t)).astype(np.float32)
+    wavfile.write(output, sample_rate, samples)
     return output.getvalue()

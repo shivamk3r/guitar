@@ -3,6 +3,7 @@ import type { ScoredEvent } from "../scoring";
 import {
   type TimedPracticeAttempt,
   buildTimedPracticePlan,
+  buildTimedPracticeSessionSummary,
   orderChordIds,
   summarizeTimedPractice,
 } from "./timed-practice";
@@ -121,5 +122,54 @@ describe("summarizeTimedPractice", () => {
     ]);
     expect(summary.hitRate).toBe(0);
     expect(summary.recommendation).toBe("slow down");
+  });
+});
+
+describe("buildTimedPracticeSessionSummary", () => {
+  it("creates a local history row from a timed practice summary", () => {
+    const summary = summarizeTimedPractice([
+      attempt({ index: 0, chordId: "A", previousChordId: null, score: 8 }),
+      attempt({ index: 1, chordId: "D", previousChordId: "A", score: 6 }),
+    ]);
+
+    expect(
+      buildTimedPracticeSessionSummary({
+        id: "timed-session-1",
+        startedAtIso: "2026-05-30T10:00:00.000Z",
+        endedAtIso: "2026-05-30T10:02:00.000Z",
+        chordIds: ["A", "D"],
+        bpm: 72,
+        summary,
+      }),
+    ).toEqual({
+      id: "timed-session-1",
+      startedAtIso: "2026-05-30T10:00:00.000Z",
+      endedAtIso: "2026-05-30T10:02:00.000Z",
+      drillType: "timed-chord",
+      chords: ["A", "D"],
+      targetBpm: 72,
+      averageScore: 7,
+      events: 2,
+      completionStatus: "completed",
+      resultSummary: "7.0/10 average across 2 attempts",
+    });
+  });
+
+  it("marks stopped timed practice without a score", () => {
+    expect(
+      buildTimedPracticeSessionSummary({
+        id: "timed-stopped",
+        startedAtIso: "2026-05-30T10:00:00.000Z",
+        endedAtIso: "2026-05-30T10:00:20.000Z",
+        chordIds: ["A", "D"],
+        bpm: 72,
+        summary: summarizeTimedPractice([]),
+      }),
+    ).toMatchObject({
+      averageScore: 0,
+      events: 0,
+      completionStatus: "stopped",
+      resultSummary: "No attempts scored",
+    });
   });
 });

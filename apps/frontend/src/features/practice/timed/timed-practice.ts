@@ -1,3 +1,4 @@
+import type { SessionSummary } from "@/storage/db";
 import type { ScoredEvent, StringClass } from "../scoring";
 
 export type TimedPracticeOrder = "forward" | "reverse" | "shuffle";
@@ -140,6 +141,31 @@ export function summarizeTimedPractice(
       timingConsistencyMs,
       weakestTransition,
     }),
+  };
+}
+
+export function buildTimedPracticeSessionSummary(input: {
+  id: string;
+  startedAtIso: string;
+  endedAtIso: string;
+  chordIds: readonly string[];
+  bpm: number;
+  summary: TimedPracticeSummary;
+}): SessionSummary {
+  return {
+    id: input.id,
+    startedAtIso: input.startedAtIso,
+    endedAtIso: input.endedAtIso,
+    drillType: "timed-chord",
+    chords: [...input.chordIds],
+    targetBpm: input.bpm,
+    averageScore: input.summary.averageScore,
+    events: input.summary.attempts,
+    completionStatus: input.summary.attempts > 0 ? "completed" : "stopped",
+    resultSummary:
+      input.summary.attempts === 0
+        ? "No attempts scored"
+        : `${input.summary.averageScore.toFixed(1)}/10 average across ${input.summary.attempts} attempts`,
   };
 }
 

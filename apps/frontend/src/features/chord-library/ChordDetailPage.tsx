@@ -11,6 +11,7 @@ import { type ActiveRecordedSession, startRecordedSession } from "@/audio/sessio
 import { ensureEngineStarted, getEngine, useEngineState } from "@/audio/useAudioEngine";
 import { type ChordDef, getChord, playedNotes } from "@/data/chords";
 import { type ScoredEvent, type StringClass, scoreEvent } from "@/features/practice/scoring";
+import { syncLearningSessionOrQueue } from "@/storage/pending-backend-sync";
 import { useProgress } from "@/storage/progress-store";
 import { useSettings } from "@/storage/settings-store";
 import { Button } from "@/ui/Button";
@@ -19,6 +20,7 @@ import { LearnTermLink } from "@/ui/LearnTermLink";
 import { LinkedFeedbackCue } from "@/ui/LinkedFeedbackCue";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { buildChordCheckSessionSummary } from "./chord-check-session";
 import { useChordCheck } from "./chord-check-store";
 import { playChordReference } from "./reference-audio";
 
@@ -60,8 +62,10 @@ function ChordDetailInner({ chordId }: { chordId: string }) {
   const { state, lastResult, setState, setResult, setExpected, reset } = useChordCheck();
   const [error, setError] = useState<string | null>(null);
   const recordChordCheck = useProgress((s) => s.recordChordCheck);
+  const saveSession = useProgress((s) => s.saveSession);
   const settings = useSettings();
   const recordingRef = useRef<ActiveRecordedSession | null>(null);
+  const sessionRef = useRef<{ id: string; startedAtIso: string } | null>(null);
   const capturingRef = useRef(false);
   const chromaBuffer = useRef<ChromaFrame[]>([]);
   const attemptsRef = useRef<ChordCheckAttemptMetadata[]>([]);
@@ -150,8 +154,12 @@ function ChordDetailInner({ chordId }: { chordId: string }) {
     attemptsRef.current = [];
     try {
       const engine = await ensureEngineStarted();
+      const session = { id: crypto.randomUUID(), startedAtIso: new Date().toISOString() };
+      sessionRef.current = session;
       setState("listening");
       recordingRef.current = await startRecordedSession({
+        id: session.id,
+        startedAtIso: session.startedAtIso,
         engine,
         activityType: "chord_check",
         settings,
@@ -168,14 +176,52 @@ function ChordDetailInner({ chordId }: { chordId: string }) {
   }
 
   async function handleStop() {
+    const endedAtIso = new Date().toISOString();
+    const session = sessionRef.current ?? {
+      id: crypto.randomUUID(),
+      startedAtIso: new Date(Date.now() - 60_000).toISOString(),
+    };
+    const metadata = buildChordCheckSessionMetadata(chord, attemptsRef.current);
+    const hadBackendSession = recordingRef.current !== null;
+    let backendStopFailed = false;
     try {
-      await recordingRef.current?.stop(buildChordCheckSessionMetadata(chord, attemptsRef.current));
+      await recordingRef.current?.stop(metadata);
     } catch (err) {
+      backendStopFailed = true;
       console.error("session recording upload failed", err);
     } finally {
       recordingRef.current = null;
     }
+    try {
+      await saveSession(
+        buildChordCheckSessionSummary({
+          id: session.id,
+          startedAtIso: session.startedAtIso,
+          endedAtIso,
+          chord,
+          attempts: attemptsRef.current,
+        }),
+      );
+    } catch (err) {
+      console.error("local chord check session save failed", err);
+    }
+    if (!hadBackendSession || backendStopFailed) {
+      const syncResult = await syncLearningSessionOrQueue(
+        {
+          sessionId: session.id,
+          activityType: "chord_check",
+          startedAtIso: session.startedAtIso,
+          endedAtIso,
+          metadata,
+        },
+        settings,
+      );
+      if (!syncResult.synced) {
+        console.error("chord check backend sync queued", syncResult.error);
+      }
+    }
     await getEngine().stop();
+    sessionRef.current = null;
     reset();
   }
 
